@@ -365,6 +365,15 @@ static void fpm_parent_resources_use(struct fpm_child_s *child) /* {{{ */
 }
 /* }}} */
 
+/*abel:根据进程池配置创建fpm子进程（根据Dynamic/ondemand/static关键字）
+ * return 0 fork成功 (子进程)
+ *        1 fork成功 (父进程)
+ *        2 fork失败（父进程）
+ * 在父进程中会得到1或者2结果
+ * 1:
+ *  1.1、父进程会将生成的child（fpm_child_s）对象的真实pid填充
+ *  1.2、将该child放进自己的child对象池中
+ * 在子进程中会得到0*/
 int fpm_children_make(struct fpm_worker_pool_s *wp, int in_event_loop, int nb_to_spawn, int is_debug) /* {{{ */
 {
 	pid_t pid;
@@ -398,22 +407,27 @@ int fpm_children_make(struct fpm_worker_pool_s *wp, int in_event_loop, int nb_to
 	while (fpm_pctl_can_spawn_children() && wp->running_children < max && (fpm_global_config.process_max < 1 || fpm_globals.running_children < fpm_global_config.process_max)) {
 
 		warned = 0;
+		/*abel:准备好一个child(fpm_child_s：doubly link list)结构*/
 		child = fpm_resources_prepare(wp);
 
+		/*abel:不具备条件直接return错误*/
 		if (!child) {
 			return 2;
 		}
 
+		/*abel: self clone*/
 		pid = fork();
 
 		switch (pid) {
-
+            /*abel:fork success
+             * 标记自己为子进程 并return成功*/
 			case 0 :
 				fpm_child_resources_use(child);
 				fpm_globals.is_child = 1;
 				fpm_child_init(wp);
 				return 0;
-
+			/*abel:fork failed
+			 * */
 			case -1 :
 				zlog(ZLOG_SYSERROR, "fork() failed");
 
@@ -422,7 +436,14 @@ int fpm_children_make(struct fpm_worker_pool_s *wp, int in_event_loop, int nb_to
 
 			default :
 				child->pid = pid;
+				/*abel:
+				 *      tv->tv_sec = ts.tv_sec;
+		         *      tv->tv_usec = ts.tv_nsec / 1000;*/
 				fpm_clock_get(&child->started);
+				/*??abel:
+				 * 将child装在进父进程监控中
+				 * fpm_stdio_parent_use_pipes(child);
+	             * fpm_child_link(child);*/
 				fpm_parent_resources_use(child);
 
 				zlog(is_debug ? ZLOG_DEBUG : ZLOG_NOTICE, "[pool %s] child %d started", wp->config->name, (int) pid);
@@ -441,6 +462,8 @@ int fpm_children_make(struct fpm_worker_pool_s *wp, int in_event_loop, int nb_to
 }
 /* }}} */
 
+
+/*abel: 构建child*/
 int fpm_children_create_initial(struct fpm_worker_pool_s *wp) /* {{{ */
 {
 	if (wp->config->pm == PM_STYLE_ONDEMAND) {

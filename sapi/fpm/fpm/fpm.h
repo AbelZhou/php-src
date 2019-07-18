@@ -33,10 +33,12 @@
 #define FPM_EXIT_CONFIG 78
 #endif
 
-
+/*abel: fpm_init & fpm_run*/
 int fpm_run(int *max_requests);
 int fpm_init(int argc, char **argv, char *config, char *prefix, char *pid, int test_conf, int run_as_root, int force_daemon, int force_stderr);
 
+/*abel: 全局fpm结构体
+ * 包含父进程pid，config，自身pid，日志级别等等的一些信息*/
 struct fpm_globals_s {
 	pid_t parent_pid;
 	int argc;

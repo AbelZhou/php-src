@@ -16,8 +16,10 @@ enum fpm_address_domain {
 	FPM_AF_INET = 2
 };
 
+/*abel: FPM 进程池
+ * ListNode实现*/
 struct fpm_worker_pool_s {
-	struct fpm_worker_pool_s *next;
+	struct fpm_worker_pool_s *next; //Next worker
 	struct fpm_worker_pool_config_s *config;
 	char *user, *home;									/* for setting env USER and HOME */
 	enum fpm_address_domain listen_address_domain;

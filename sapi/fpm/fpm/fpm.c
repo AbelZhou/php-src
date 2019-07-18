@@ -41,6 +41,8 @@ struct fpm_globals_s fpm_globals = {
 	.send_config_pipe = {0, 0},
 };
 
+/*abel:
+ *      FPM初始化，处理启动参数，加载php-fpm.conf配置信息，并将fpm_golbals结构填充满*/
 int fpm_init(int argc, char **argv, char *config, char *prefix, char *pid, int test_conf, int run_as_root, int force_daemon, int force_stderr) /* {{{ */
 {
 	fpm_globals.argc = argc;
@@ -86,8 +88,11 @@ int fpm_init(int argc, char **argv, char *config, char *prefix, char *pid, int t
 }
 /* }}} */
 
-/*	children: return listening socket
-	parent: never return */
+/*abel:
+ * children: return listening socket
+ *	parent: never return
+ *  abel:子进程返回监听的socket
+ *  父进程永远不返回  */
 int fpm_run(int *max_requests) /* {{{ */
 {
 	struct fpm_worker_pool_s *wp;
@@ -96,6 +101,10 @@ int fpm_run(int *max_requests) /* {{{ */
 	for (wp = fpm_worker_all_pools; wp; wp = wp->next) {
 		int is_parent;
 
+		/*abel:
+		 * return 0：当前进程为子进程
+		 * return 1：当前进程为父进程且fork子进程成功
+		 * return 2：当前进程为父进程但fork失败*/
 		is_parent = fpm_children_create_initial(wp);
 
 		if (!is_parent) {
@@ -110,12 +119,18 @@ int fpm_run(int *max_requests) /* {{{ */
 	}
 
 	/* run event loop forever */
+	/*abel:
+	 * 主进程陷入死循环*/
 	fpm_event_loop(0);
 
+/*abel:
+ * 子进程需要做的事情
+ * 1、初始化自身
+ * 2、继承配置文件中的max_requests
+ * 3、返回socket */
 run_child: /* only workers reach this point */
 
 	fpm_cleanups_run(FPM_CLEANUP_CHILD);
-
 	*max_requests = fpm_globals.max_requests;
 	return fpm_globals.listening_socket;
 }

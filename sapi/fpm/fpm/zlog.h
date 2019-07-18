@@ -9,6 +9,7 @@
 #define zlog(flags,...) zlog_ex(__func__, __LINE__, flags, __VA_ARGS__)
 #define zlog_msg(flags, prefix, msg) zlog_msg_ex(__func__, __LINE__, flags, prefix, msg)
 
+/*??abel:没有成员列表*/
 struct timeval;
 
 typedef unsigned char zlog_bool;

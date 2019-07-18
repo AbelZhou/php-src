@@ -209,6 +209,9 @@ typedef int (*zend_write_func_t)(const char *str, size_t str_length);
 
 #define zend_bailout()		_zend_bailout(__FILE__, __LINE__)
 
+/*abel:
+ * zend_try:https://www.cnblogs.com/yjf512/p/6092708.html
+ * 保存bailout后执行后面的语句（EG(bailout) = __orig_bailout；），后面语句如果返回值不是0，执行else（相当于走cache）*/
 #define zend_try												\
 	{															\
 		JMP_BUF *__orig_bailout = EG(bailout);					\

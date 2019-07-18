@@ -1575,9 +1575,10 @@ int main(int argc, char *argv[])
 #ifdef ZTS
 	php_tsrm_startup();
 #endif
-
+    //信号加载
 	zend_signal_startup();
-
+    //sapi启动
+    php_printf("startup sapi_startup(&cgi_sapi_module)\n");
 	sapi_startup(&cgi_sapi_module);
 	cgi_sapi_module.php_ini_path_override = NULL;
 	cgi_sapi_module.php_ini_ignore_cwd = 1;
@@ -1586,8 +1587,10 @@ int main(int argc, char *argv[])
 	fcgi_set_logger(fpm_fcgi_log);
 #endif
 
+    //??
 	fcgi_init();
 
+	//获得cli指令/参数
 	while ((c = php_getopt(argc, argv, OPTIONS, &php_optarg, &php_optind, 0, 2)) != -1) {
 		switch (c) {
 			case 'c':
@@ -1763,7 +1766,9 @@ int main(int argc, char *argv[])
 	cgi_sapi_module.additional_functions = NULL;
 	cgi_sapi_module.executable_location = argv[0];
 
-	/* startup after we get the above ini override se we get things right */
+	/* startup after we get the above ini override se we get things right
+	 * sapi module 启动 */
+
 	if (cgi_sapi_module.startup(&cgi_sapi_module) == FAILURE) {
 #ifdef ZTS
 		tsrm_shutdown();
@@ -1820,6 +1825,7 @@ consult the installation file that came with this distribution, or visit \n\
 	zend_rc_debug = 0;
 #endif
 
+    /*abel:FPM 初始化，处理php-fpm.conf*/
 	ret = fpm_init(argc, argv, fpm_config ? fpm_config : CGIG(fpm_config), fpm_prefix, fpm_pid, test_conf, php_allow_to_run_as_root, force_daemon, force_stderr);
 
 #if ZEND_RC_DEBUG
@@ -1845,6 +1851,11 @@ consult the installation file that came with this distribution, or visit \n\
 	}
 	fpm_is_running = 1;
 
+	/*abel:FPM RUN
+	 * @fpm/fpm.c line:96
+	 * 主进程在函数中陷入死循环
+	 * 子进程继续向下执行
+	 * 以下逻辑为子进程逻辑*/
 	fcgi_fd = fpm_run(&max_requests);
 	parent = 0;
 
@@ -1856,19 +1867,28 @@ consult the installation file that came with this distribution, or visit \n\
 	php_import_environment_variables = cgi_php_import_environment_variables;
 
 	/* library is already initialized, now init our request */
+	/*abel:
+	 * 初始化request 返回一个_fcgi_request的结构  @ main/fastcgi.c line:210*/
 	request = fpm_init_request(fcgi_fd);
 
+	/*abel:
+	 * zend engine 自行实现的try cache*/
 	zend_first_try {
-		while (EXPECTED(fcgi_accept_request(request) >= 0)) {
+		/*abel:
+		 * 进入抢占模型
+		 * fcgi_accept_request 从Cgi中获得请求，一旦获得请求后，直接进行处理*/
+	    while (EXPECTED(fcgi_accept_request(request) >= 0)) {
 			char *primary_script = NULL;
 			request_body_fd = -1;
 			SG(server_context) = (void *) request;
+			/*abel:初始化cgi request info*/
 			init_request_info();
-
+			/*abel:初始化fpm request info*/
 			fpm_request_info();
 
 			/* request startup only after we've done all we can to
 			 *            get path_translated */
+			/*abel:request startup*/
 			if (UNEXPECTED(php_request_startup() == FAILURE)) {
 				fcgi_finish_request(request, 1);
 				SG(server_context) = NULL;
@@ -1930,9 +1950,10 @@ consult the installation file that came with this distribution, or visit \n\
 			}
 
 			fpm_request_executing();
-
+			/*abel:执行PHP脚本*/
 			php_execute_script(&file_handle);
 
+/*abel:cgi请求结束*/
 fastcgi_request_done:
 			if (EXPECTED(primary_script)) {
 				efree(primary_script);

@@ -397,7 +397,8 @@ void zend_signal_init(void) /* {{{ */
 /* }}} */
 
 /* {{{ zend_signal_startup
- * alloc zend signal globals */
+ * alloc zend signal globals
+ * 信号启动器，分配全局信号*/
 ZEND_API void zend_signal_startup(void)
 {
 

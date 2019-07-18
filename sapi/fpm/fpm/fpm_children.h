@@ -18,6 +18,8 @@ int fpm_children_make(struct fpm_worker_pool_s *wp, int in_event_loop, int nb_to
 
 struct fpm_child_s;
 
+/*abel: fpm child结构 doubly link list
+ * 包含属于哪个worker_pool,自身pid，等信息*/
 struct fpm_child_s {
 	struct fpm_child_s *prev, *next;
 	struct timeval started;
