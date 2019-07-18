@@ -17,25 +17,25 @@ enum fpm_address_domain {
 };
 
 /*abel: FPM 进程池
- * ListNode实现*/
+ * link list实现*/
 struct fpm_worker_pool_s {
 	struct fpm_worker_pool_s *next; //Next worker
-	struct fpm_worker_pool_config_s *config;
+	struct fpm_worker_pool_config_s *config; //php-fpm.conf
 	char *user, *home;									/* for setting env USER and HOME */
 	enum fpm_address_domain listen_address_domain;
-	int listening_socket;
+	int listening_socket;          //套接字
 	int set_uid, set_gid;								/* config uid and gid */
 	int socket_uid, socket_gid, socket_mode;
 
 	/* runtime */
-	struct fpm_child_s *children;
+	struct fpm_child_s *children; //进程池中的全部子进程 doubly link list @ fpm_children.h line 20
 	int running_children;
 	int idle_spawn_rate;
 	int warn_max_children;
 #if 0
 	int warn_lq;
 #endif
-	struct fpm_scoreboard_s *scoreboard;
+	struct fpm_scoreboard_s *scoreboard; //worker pool 中worker的运行信息
 	int log_fd;
 	char **limit_extensions;
 

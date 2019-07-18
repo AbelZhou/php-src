@@ -44,6 +44,8 @@ struct fpm_scoreboard_proc_s {
 	size_t memory;
 };
 
+/*abel:
+ * worker pool 中worker的运行信息*/
 struct fpm_scoreboard_s {
 	union {
 		atomic_t lock;
