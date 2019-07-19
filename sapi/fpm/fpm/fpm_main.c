@@ -1868,7 +1868,9 @@ consult the installation file that came with this distribution, or visit \n\
 
 	/* library is already initialized, now init our request */
 	/*abel:
-	 * 初始化request 返回一个_fcgi_request的结构  @ main/fastcgi.c line:210*/
+	 * 初始化request 返回一个_fcgi_request的结构  @ main/fastcgi.c line:210
+	 * 这里面会插入三个hook：req->hook.on_accept();req->hook.on_read();req->hook.on_close();
+	 * */
 	request = fpm_init_request(fcgi_fd);
 
 	/*abel:
@@ -1989,7 +1991,7 @@ fastcgi_request_done:
 				break;
 			}
 			/* end of fastcgi loop */
-		}
+		} //end while
 		fcgi_destroy_request(request);
 		fcgi_shutdown();
 
