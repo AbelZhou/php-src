@@ -2529,8 +2529,8 @@ ZEND_VM_HANDLER(24, ZEND_ASSIGN_OBJ, VAR|UNUSED|THIS|CV, CONST|TMPVAR|CV, CACHE_
 		}
 		object = make_real_object(object, property OPLINE_CC EXECUTE_DATA_CC);
 		if (UNEXPECTED(!object)) {
-			FREE_OP_DATA();
-			ZEND_VM_C_GOTO(exit_assign_obj);
+			value = &EG(uninitialized_zval);
+			ZEND_VM_C_GOTO(free_and_exit_assign_obj);
 		}
 	}
 
@@ -2561,15 +2561,12 @@ ZEND_VM_C_LABEL(assign_object):
 					if (OP_DATA_TYPE == IS_CONST && Z_TYPE_P(value) == orig_type) {
 						CACHE_PTR_EX(cache_slot + 2, NULL);
 					}
-					FREE_OP_DATA();
+					ZEND_VM_C_GOTO(free_and_exit_assign_obj);
 				} else {
 ZEND_VM_C_LABEL(fast_assign_obj):
 					value = zend_assign_to_variable(property_val, value, OP_DATA_TYPE, EX_USES_STRICT_TYPES());
+					ZEND_VM_C_GOTO(exit_assign_obj);
 				}
-				if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
-					ZVAL_COPY(EX_VAR(opline->result.var), value);
-				}
-				ZEND_VM_C_GOTO(exit_assign_obj);
 			}
 		} else {
 			if (EXPECTED(zobj->properties != NULL)) {
@@ -2615,9 +2612,6 @@ ZEND_VM_C_LABEL(fast_assign_obj):
 					}
 				}
 				zend_hash_add_new(zobj->properties, Z_STR_P(property), value);
-				if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
-					ZVAL_COPY(EX_VAR(opline->result.var), value);
-				}
 				ZEND_VM_C_GOTO(exit_assign_obj);
 			}
 		}
@@ -2638,17 +2632,18 @@ ZEND_VM_C_LABEL(fast_assign_obj):
 		}
 	}
 
-	property = zobj->handlers->write_property(zobj, name, value, (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : NULL);
+	value = zobj->handlers->write_property(zobj, name, value, (OP2_TYPE == IS_CONST) ? CACHE_ADDR(opline->extended_value) : NULL);
 
 	if (OP2_TYPE != IS_CONST) {
 		zend_tmp_string_release(tmp_name);
 	}
 
-	if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
-		ZVAL_COPY(EX_VAR(opline->result.var), property);
-	}
+ZEND_VM_C_LABEL(free_and_exit_assign_obj):
 	FREE_OP_DATA();
 ZEND_VM_C_LABEL(exit_assign_obj):
+	if (UNEXPECTED(RETURN_VALUE_USED(opline))) {
+		ZVAL_COPY(EX_VAR(opline->result.var), value);
+	}
 	FREE_OP2();
 	FREE_OP1_VAR_PTR();
 	/* assign_obj has two opcodes! */
@@ -7354,41 +7349,52 @@ ZEND_VM_HANDLER(145, ZEND_DECLARE_CLASS_DELAYED, CONST, CONST)
 {
 	USE_OPLINE
 	zval *lcname, *zv;
+	zend_class_entry *ce;
 
-	SAVE_OPLINE();
-	lcname = RT_CONSTANT(opline, opline->op1);
-	zv = zend_hash_find_ex(EG(class_table), Z_STR_P(lcname + 1), 1);
-
-	if (zv) {
-		zend_class_entry *ce = Z_CE_P(zv);
-		zv = zend_hash_set_bucket_key(EG(class_table), (Bucket*)zv, Z_STR_P(lcname));
-		if (UNEXPECTED(!zv)) {
-			zend_error_noreturn(E_COMPILE_ERROR, "Cannot declare %s %s, because the name is already in use", zend_get_object_type(ce), ZSTR_VAL(ce->name));
-		} else {
-			zend_do_link_class(ce, Z_STR_P(RT_CONSTANT(opline, opline->op2)));
+	ce = CACHED_PTR(opline->extended_value);
+	if (ce == NULL) {
+		lcname = RT_CONSTANT(opline, opline->op1);
+		zv = zend_hash_find_ex(EG(class_table), Z_STR_P(lcname + 1), 1);
+		if (zv) {
+			SAVE_OPLINE();
+			ce = Z_CE_P(zv);
+			zv = zend_hash_set_bucket_key(EG(class_table), (Bucket*)zv, Z_STR_P(lcname));
+			if (UNEXPECTED(!zv)) {
+				zend_error_noreturn(E_COMPILE_ERROR, "Cannot declare %s %s, because the name is already in use", zend_get_object_type(ce), ZSTR_VAL(ce->name));
+			} else {
+				zend_do_link_class(ce, Z_STR_P(RT_CONSTANT(opline, opline->op2)));
+				if (UNEXPECTED(EG(exception))) {
+					HANDLE_EXCEPTION();
+				}
+			}
 		}
+		CACHE_PTR(opline->extended_value, ce);
 	}
-	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+	ZEND_VM_NEXT_OPCODE();
 }
 
-ZEND_VM_HANDLER(146, ZEND_DECLARE_ANON_CLASS, ANY, ANY, JMP_ADDR)
+ZEND_VM_HANDLER(146, ZEND_DECLARE_ANON_CLASS, ANY, ANY, CACHE_SLOT)
 {
 	zval *zv;
 	zend_class_entry *ce;
 	USE_OPLINE
 
-	SAVE_OPLINE();
-	zv = zend_hash_find_ex(EG(class_table), Z_STR_P(RT_CONSTANT(opline, opline->op1)), 1);
-	ZEND_ASSERT(zv != NULL);
-	ce = Z_CE_P(zv);
-	Z_CE_P(EX_VAR(opline->result.var)) = ce;
-
-	if (ce->ce_flags & ZEND_ACC_LINKED) {
-		ZEND_VM_SET_RELATIVE_OPCODE(opline, opline->extended_value);
-		ZEND_VM_CONTINUE();
+	ce = CACHED_PTR(opline->extended_value);
+	if (UNEXPECTED(ce == NULL)) {
+		zv = zend_hash_find_ex(EG(class_table), Z_STR_P(RT_CONSTANT(opline, opline->op1)), 1);
+		ZEND_ASSERT(zv != NULL);
+		ce = Z_CE_P(zv);
+		if (!(ce->ce_flags & ZEND_ACC_LINKED)) {
+			SAVE_OPLINE();
+			zend_do_link_class(ce, (OP2_TYPE == IS_CONST) ? Z_STR_P(RT_CONSTANT(opline, opline->op2)) : NULL);
+			if (UNEXPECTED(EG(exception))) {
+				HANDLE_EXCEPTION();
+			}
+		}
+		CACHE_PTR(opline->extended_value, ce);
 	}
-	zend_do_link_class(ce, (OP2_TYPE == IS_CONST) ? Z_STR_P(RT_CONSTANT(opline, opline->op2)) : NULL);
-	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
+	Z_CE_P(EX_VAR(opline->result.var)) = ce;
+	ZEND_VM_NEXT_OPCODE();
 }
 
 ZEND_VM_HANDLER(141, ZEND_DECLARE_FUNCTION, ANY, ANY)
@@ -7657,19 +7663,26 @@ ZEND_VM_HANDLER(143, ZEND_DECLARE_CONST, CONST, CONST)
 	ZEND_VM_NEXT_OPCODE_CHECK_EXCEPTION();
 }
 
-ZEND_VM_HANDLER(142, ZEND_DECLARE_LAMBDA_FUNCTION, CONST, UNUSED)
+ZEND_VM_HANDLER(142, ZEND_DECLARE_LAMBDA_FUNCTION, CONST, UNUSED, CACHE_SLOT)
 {
 	USE_OPLINE
+	zend_function *func;
 	zval *zfunc;
 	zval *object;
 	zend_class_entry *called_scope;
 
-	zfunc = zend_hash_find_ex(EG(function_table), Z_STR_P(RT_CONSTANT(opline, opline->op1)), 1);
-	ZEND_ASSERT(zfunc != NULL && Z_FUNC_P(zfunc)->type == ZEND_USER_FUNCTION);
+	func = CACHED_PTR(opline->extended_value);
+	if (UNEXPECTED(func == NULL)) {
+		zfunc = zend_hash_find_ex(EG(function_table), Z_STR_P(RT_CONSTANT(opline, opline->op1)), 1);
+		ZEND_ASSERT(zfunc != NULL);
+		func = Z_FUNC_P(zfunc);
+		ZEND_ASSERT(func->type == ZEND_USER_FUNCTION);
+		CACHE_PTR(opline->extended_value, func);
+	}
 
 	if (Z_TYPE(EX(This)) == IS_OBJECT) {
 		called_scope = Z_OBJCE(EX(This));
-		if (UNEXPECTED((Z_FUNC_P(zfunc)->common.fn_flags & ZEND_ACC_STATIC) ||
+		if (UNEXPECTED((func->common.fn_flags & ZEND_ACC_STATIC) ||
 				(EX(func)->common.fn_flags & ZEND_ACC_STATIC))) {
 			object = NULL;
 		} else {
@@ -7679,7 +7692,7 @@ ZEND_VM_HANDLER(142, ZEND_DECLARE_LAMBDA_FUNCTION, CONST, UNUSED)
 		called_scope = Z_CE(EX(This));
 		object = NULL;
 	}
-	zend_create_closure(EX_VAR(opline->result.var), Z_FUNC_P(zfunc),
+	zend_create_closure(EX_VAR(opline->result.var), func,
 		EX(func)->op_array.scope, called_scope, object);
 
 	ZEND_VM_NEXT_OPCODE();

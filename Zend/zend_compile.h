@@ -749,7 +749,7 @@ void zend_do_free(znode *op1);
 ZEND_API int do_bind_function(zval *lcname);
 ZEND_API int do_bind_class(zval *lcname, zend_string *lc_parent_name);
 ZEND_API uint32_t zend_build_delayed_early_binding_list(const zend_op_array *op_array);
-ZEND_API void zend_do_delayed_early_binding(const zend_op_array *op_array, uint32_t first_early_binding_opline);
+ZEND_API void zend_do_delayed_early_binding(zend_op_array *op_array, uint32_t first_early_binding_opline);
 
 void zend_do_extended_info(void);
 void zend_do_extended_fcall_begin(void);
@@ -917,7 +917,8 @@ void zend_assert_valid_class_name(const zend_string *const_name);
 #define ZEND_SEND_BY_REF     1u
 #define ZEND_SEND_PREFER_REF 2u
 
-#define ZEND_DIM_IS 1
+#define ZEND_DIM_IS					(1 << 0) /* isset fetch needed for null coalesce */
+#define ZEND_DIM_ALTERNATIVE_SYNTAX	(1 << 1) /* deprecated curly brace usage */
 
 /* Make sure these don't clash with ZEND_FETCH_CLASS_* flags. */
 #define IS_CONSTANT_CLASS                    0x400 /* __CLASS__ in trait */

@@ -1130,11 +1130,24 @@ ZEND_API uint32_t zend_build_delayed_early_binding_list(const zend_op_array *op_
 }
 /* }}} */
 
-ZEND_API void zend_do_delayed_early_binding(const zend_op_array *op_array, uint32_t first_early_binding_opline) /* {{{ */
+ZEND_API void zend_do_delayed_early_binding(zend_op_array *op_array, uint32_t first_early_binding_opline) /* {{{ */
 {
 	if (first_early_binding_opline != (uint32_t)-1) {
 		zend_bool orig_in_compilation = CG(in_compilation);
 		uint32_t opline_num = first_early_binding_opline;
+		void **run_time_cache;
+
+		if (!ZEND_MAP_PTR(op_array->run_time_cache)) {
+			void *ptr;
+
+			ZEND_ASSERT(op_array->fn_flags & ZEND_ACC_HEAP_RT_CACHE);
+			ptr = emalloc(op_array->cache_size + sizeof(void*));
+			ZEND_MAP_PTR_INIT(op_array->run_time_cache, ptr);
+			ptr = (char*)ptr + sizeof(void*);
+			ZEND_MAP_PTR_SET(op_array->run_time_cache, ptr);
+			memset(ptr, 0, op_array->cache_size);
+		}
+		run_time_cache = RUN_TIME_CACHE(op_array);
 
 		CG(in_compilation) = 1;
 		while (opline_num != (uint32_t)-1) {
@@ -1148,7 +1161,10 @@ ZEND_API void zend_do_delayed_early_binding(const zend_op_array *op_array, uint3
 				zend_class_entry *parent_ce = zend_hash_find_ex_ptr(EG(class_table), lc_parent_name, 1);
 
 				if (parent_ce) {
-					zend_try_early_bind(ce, parent_ce, Z_STR_P(lcname), zv);
+					if (zend_try_early_bind(ce, parent_ce, Z_STR_P(lcname), zv)) {
+						/* Store in run-time cache */
+						((void**)((char*)run_time_cache + opline->extended_value))[0] = ce;
+					}
 				}
 			}
 			opline_num = op_array->opcodes[opline_num].result.opline_num;
@@ -2348,6 +2364,10 @@ static inline void zend_emit_assign_znode(zend_ast *var_ast, znode *value_node) 
 
 static zend_op *zend_delayed_compile_dim(znode *result, zend_ast *ast, uint32_t type) /* {{{ */
 {
+	if (ast->attr == ZEND_DIM_ALTERNATIVE_SYNTAX) {
+		zend_error(E_DEPRECATED, "Array and string offset access syntax with curly braces is deprecated");
+	}
+
 	zend_ast *var_ast = ast->child[0];
 	zend_ast *dim_ast = ast->child[1];
 	zend_op *opline;
@@ -3935,11 +3955,10 @@ void zend_compile_new(znode *result, zend_ast *ast) /* {{{ */
 	zend_op *opline;
 
 	if (class_ast->kind == ZEND_AST_CLASS) {
-		/* jump over anon class declaration */
+		/* anon class declaration */
 		opline = zend_compile_class_decl(class_ast, 0);
 		class_node.op_type = opline->result_type;
 		class_node.u.op.var = opline->result.var;
-		opline->extended_value = get_next_op_number();
 	} else {
 		zend_compile_class_ref(&class_node, class_ast, ZEND_FETCH_CLASS_EXCEPTION);
 	}
@@ -5743,6 +5762,7 @@ static void zend_begin_func_decl(znode *result, zend_op_array *op_array, zend_as
 
 	if (op_array->fn_flags & ZEND_ACC_CLOSURE) {
 		opline = zend_emit_op_tmp(result, ZEND_DECLARE_LAMBDA_FUNCTION, NULL, NULL);
+		opline->extended_value = zend_alloc_cache_slot();
 		opline->op1_type = IS_CONST;
 		LITERAL_STR(opline->op1, key);
 	} else {
@@ -6355,6 +6375,7 @@ zend_op *zend_compile_class_decl(zend_ast *ast, zend_bool toplevel) /* {{{ */
 
 	if (decl->flags & ZEND_ACC_ANON_CLASS) {
 		opline->opcode = ZEND_DECLARE_ANON_CLASS;
+		opline->extended_value = zend_alloc_cache_slot();
 		opline->result_type = IS_VAR;
 		opline->result.var = get_temporary_variable();
 
@@ -6380,6 +6401,7 @@ zend_op *zend_compile_class_decl(zend_ast *ast, zend_bool toplevel) /* {{{ */
 		) {
 			CG(active_op_array)->fn_flags |= ZEND_ACC_EARLY_BINDING;
 			opline->opcode = ZEND_DECLARE_CLASS_DELAYED;
+			opline->extended_value = zend_alloc_cache_slot();
 			opline->result_type = IS_UNUSED;
 			opline->result.opline_num = -1;
 		}
@@ -8607,7 +8629,7 @@ void zend_eval_const_expr(zend_ast **ast_ptr) /* {{{ */
 		case ZEND_AST_COALESCE:
 			/* Set isset fetch indicator here, opcache disallows runtime altering of the AST */
 			if (ast->child[0]->kind == ZEND_AST_DIM) {
-				ast->child[0]->attr = ZEND_DIM_IS;
+				ast->child[0]->attr |= ZEND_DIM_IS;
 			}
 			zend_eval_const_expr(&ast->child[0]);
 
@@ -8661,9 +8683,14 @@ void zend_eval_const_expr(zend_ast **ast_ptr) /* {{{ */
 				zend_error_noreturn(E_COMPILE_ERROR, "Cannot use [] for reading");
 			}
 
+			if (ast->attr & ZEND_DIM_ALTERNATIVE_SYNTAX) {
+				ast->attr &= ~ZEND_DIM_ALTERNATIVE_SYNTAX; /* remove flag to avoid duplicate warning */
+				zend_error(E_DEPRECATED, "Array and string offset access syntax with curly braces is deprecated");
+			}
+
 			/* Set isset fetch indicator here, opcache disallows runtime altering of the AST */
-			if (ast->attr == ZEND_DIM_IS && ast->child[0]->kind == ZEND_AST_DIM) {
-				ast->child[0]->attr = ZEND_DIM_IS;
+			if (ast->attr & ZEND_DIM_IS && ast->child[0]->kind == ZEND_AST_DIM) {
+				ast->child[0]->attr |= ZEND_DIM_IS;
 			}
 
 			zend_eval_const_expr(&ast->child[0]);
