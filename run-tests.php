@@ -1351,9 +1351,9 @@ function run_all_tests_parallel($test_files, $env, $redir_tested) {
 	$workerProcs = [];
 	$workerSocks = [];
 
-	echo "====⚡️===========================================================⚡️====\n";
-	echo "====⚡️==== WELCOME TO THE FUTURE: run-tests PARALLEL EDITION ====⚡️====\n";
-	echo "====⚡️===========================================================⚡️====\n";
+	echo "=====================================================================\n";
+	echo "========= WELCOME TO THE FUTURE: run-tests PARALLEL EDITION =========\n";
+	echo "=====================================================================\n";
 
 	// Each test may specify a list of conflict keys. While a test that conflicts with
 	// key K is running, no other test that conflicts with K may run. Conflict keys are
@@ -1480,7 +1480,7 @@ function run_all_tests_parallel($test_files, $env, $redir_tested) {
 		echo "$i ";
 	}
 	echo "… done!\n";
-	echo "====⚡️===========================================================⚡️====\n";
+	echo "=====================================================================\n";
 	echo "\n";
 
 	$rawMessageBuffers = [];
@@ -2076,7 +2076,7 @@ TEST $file
 	}
 
 	// Default ini settings
-	$ini_settings = array();
+	$ini_settings = $workerID ? array('opcache.cache_id' => "worker$workerID") : array();
 
 	// Additional required extensions
 	if (array_key_exists('EXTENSIONS', $section_text)) {
@@ -2944,12 +2944,12 @@ function settings2params($ini_settings)
 				$settings .= " -d \"$name=$val\"";
 			}
 		} else {
-			if (substr(PHP_OS, 0, 3) == "WIN" && !empty($value) && $value{0} == '"') {
+			if (substr(PHP_OS, 0, 3) == "WIN" && !empty($value) && $value[0] == '"') {
 				$len = strlen($value);
 
-				if ($value{$len - 1} == '"') {
-					$value{0} = "'";
-					$value{$len - 1} = "'";
+				if ($value[$len - 1] == '"') {
+					$value[0] = "'";
+					$value[$len - 1] = "'";
 				}
 			} else {
 				$value = addslashes($value);
