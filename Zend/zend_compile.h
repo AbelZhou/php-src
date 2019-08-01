@@ -467,33 +467,33 @@ typedef struct _zend_internal_function {
 #define ZEND_FN_SCOPE_NAME(function)  ((function) && (function)->common.scope ? ZSTR_VAL((function)->common.scope->name) : "")
 
 union _zend_function {
-	zend_uchar type;	/* MUST be the first element of this struct! */
+	zend_uchar type;	/* MUST be the first element of this struct! 函数类型，用来标记是用户自定义函数还是内部函数 */
 	uint32_t   quick_arg_flags;
 
 	struct {
 		zend_uchar type;  /* never used */
 		zend_uchar arg_flags[3]; /* bitset of arg_info.pass_by_reference */
-		uint32_t fn_flags;
-		zend_string *function_name;
-		zend_class_entry *scope;
-		zend_function *prototype;
-		uint32_t num_args;
-		uint32_t required_num_args;
-		zend_arg_info *arg_info;
+		uint32_t fn_flags;  //标记其作为类的成员方法时的访问类型，是public、protected还是private
+		zend_string *function_name;  //函数名称
+		zend_class_entry *scope;  //函数所在的类作用域，用来标记作为成员方法时所属的类
+		zend_function *prototype;   //函数原型，标记内部函数或者用户自定义函数所属的zend_function
+        uint32_t num_args;  //函数的参数数量
+		uint32_t required_num_args;  //必传的参数数量
+		zend_arg_info *arg_info;  //参数信息指针
 	} common;
 
-	zend_op_array op_array;
-	zend_internal_function internal_function;
+	zend_op_array op_array; //用户自定义函数结构体
+	zend_internal_function internal_function; //内部函数结构体
 };
 
 struct _zend_execute_data {
-	const zend_op       *opline;           /* executed opline                */
+	const zend_op       *opline;           /* executed opline  指向当前执行的opcode，初始时指向zend_op_array起始位置               */
 	zend_execute_data   *call;             /* current call                   */
-	zval                *return_value;
-	zend_function       *func;             /* executed function              */
-	zval                 This;             /* this + call_info + num_args    */
-	zend_execute_data   *prev_execute_data;
-	zend_array          *symbol_table;
+	zval                *return_value;      /* 返回值指针 */
+	zend_function       *func;             /* executed function  当前执行的函数（非函数调用时为空）             */
+	zval                 This;             /* this + call_info + num_args  这个值并不仅仅是面向对象的this，还有另外两个值也通过这个记录：call_info + num_args，分别存在zval.u1.reserved、zval.u2.num_args   */
+	zend_execute_data   *prev_execute_data; /*函数调用时指向调用位置作用空间*/
+	zend_array          *symbol_table;      /*全局变量符号表*/
 	void               **run_time_cache;   /* cache op_array->run_time_cache */
 };
 
