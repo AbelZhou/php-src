@@ -17,7 +17,7 @@ if test -z "$PHP_WEBP"; then
   PHP_ARG_WITH([webp],
     [for libwebp],
     [AS_HELP_STRING([--with-webp],
-      [GD: Enable WEBP support])],
+      [GD: Enable WEBP support (only for bundled libgd)])],
     [no],
     [no])
 fi
@@ -26,7 +26,7 @@ if test -z "$PHP_JPEG"; then
   PHP_ARG_WITH([jpeg],
     [for libjpeg],
     [AS_HELP_STRING([--with-jpeg],
-      [GD: Enable JPEG support])],
+      [GD: Enable JPEG support (only for bundled libgd)])],
     [no],
     [no])
 fi
@@ -34,21 +34,21 @@ fi
 PHP_ARG_WITH([xpm],
   [for libXpm],
   [AS_HELP_STRING([--with-xpm],
-    [GD: Enable XPM support])],
+    [GD: Enable XPM support  (only for bundled libgd)])],
   [no],
   [no])
 
 PHP_ARG_WITH([freetype],
   [for FreeType 2],
   [AS_HELP_STRING([--with-freetype],
-    [GD: Enable FreeType 2 support])],
+    [GD: Enable FreeType 2 support (only for bundled libgd)])],
   [no],
   [no])
 
 PHP_ARG_ENABLE([gd-jis-conv],
   [whether to enable JIS-mapped Japanese font support in GD],
   [AS_HELP_STRING([--enable-gd-jis-conv],
-    [GD: Enable JIS-mapped Japanese font support])],
+    [GD: Enable JIS-mapped Japanese font support (only for bundled libgd)])],
   [no],
   [no])
 
@@ -109,7 +109,6 @@ AC_DEFUN([PHP_GD_FREETYPE2],[
     PHP_EVAL_LIBLINE($FREETYPE2_LIBS, GD_SHARED_LIBADD)
     AC_DEFINE(HAVE_LIBFREETYPE, 1, [ ])
     AC_DEFINE(HAVE_GD_FREETYPE, 1, [ ])
-    AC_DEFINE(ENABLE_GD_TTF, 1, [ ])
   fi
 ])
 
@@ -121,14 +120,15 @@ AC_DEFUN([PHP_GD_JISX0208],[
 ])
 
 AC_DEFUN([PHP_GD_CHECK_VERSION],[
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromPng,   [AC_DEFINE(HAVE_GD_PNG,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromWebp,  [AC_DEFINE(HAVE_GD_WEBP,             1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromJpeg,  [AC_DEFINE(HAVE_GD_JPG,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromXpm,   [AC_DEFINE(HAVE_GD_XPM,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromBmp,   [AC_DEFINE(HAVE_GD_BMP,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageCreateFromTga,   [AC_DEFINE(HAVE_GD_TGA,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdImageStringFT,        [AC_DEFINE(HAVE_GD_FREETYPE,         1, [ ])], [], [ $GD_SHARED_LIBADD ])
-  PHP_CHECK_LIBRARY(gd, gdVersionString,        [AC_DEFINE(HAVE_GD_LIBVERSION,       1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromPng,          [AC_DEFINE(HAVE_GD_PNG,               1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromWebp,         [AC_DEFINE(HAVE_GD_WEBP,              1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromJpeg,         [AC_DEFINE(HAVE_GD_JPG,               1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromXpm,          [AC_DEFINE(HAVE_GD_XPM,               1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromBmp,          [AC_DEFINE(HAVE_GD_BMP,               1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageCreateFromTga,          [AC_DEFINE(HAVE_GD_TGA,               1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageStringFT,               [AC_DEFINE(HAVE_GD_FREETYPE,          1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdVersionString,               [AC_DEFINE(HAVE_GD_LIBVERSION,        1, [ ])], [], [ $GD_SHARED_LIBADD ])
+  PHP_CHECK_LIBRARY(gd, gdImageGetInterpolationMethod, [AC_DEFINE(HAVE_GD_GET_INTERPOLATION, 1, [ ])], [], [ $GD_SHARED_LIBADD ])
 ])
 
 dnl

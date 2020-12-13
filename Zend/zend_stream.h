@@ -29,7 +29,7 @@
  * These functions are private to the engine.
  * */
 typedef size_t (*zend_stream_fsizer_t)(void* handle);
-typedef size_t (*zend_stream_reader_t)(void* handle, char *buf, size_t len);
+typedef ssize_t (*zend_stream_reader_t)(void* handle, char *buf, size_t len);
 typedef void   (*zend_stream_closer_t)(void* handle);
 
 #define ZEND_MMAP_AHEAD 32
@@ -56,6 +56,9 @@ typedef struct _zend_file_handle {
 	const char        *filename;
 	zend_string       *opened_path;
 	zend_stream_type  type;
+	/* free_filename is used by wincache */
+	/* TODO: Clean up filename vs opened_path mess */
+	zend_bool         free_filename;
 	char              *buf;
 	size_t            len;
 } zend_file_handle;
@@ -63,8 +66,8 @@ typedef struct _zend_file_handle {
 BEGIN_EXTERN_C()
 ZEND_API void zend_stream_init_fp(zend_file_handle *handle, FILE *fp, const char *filename);
 ZEND_API void zend_stream_init_filename(zend_file_handle *handle, const char *filename);
-ZEND_API int zend_stream_open(const char *filename, zend_file_handle *handle);
-ZEND_API int zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t *len);
+ZEND_API zend_result zend_stream_open(const char *filename, zend_file_handle *handle);
+ZEND_API zend_result zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t *len);
 ZEND_API void zend_file_handle_dtor(zend_file_handle *fh);
 ZEND_API int zend_compare_file_handles(zend_file_handle *fh1, zend_file_handle *fh2);
 END_EXTERN_C()

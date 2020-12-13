@@ -1,7 +1,5 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -38,7 +36,6 @@ enum_func_status mysqlnd_stmt_execute_generate_request(MYSQLND_STMT * const s, z
 enum_func_status mysqlnd_stmt_execute_batch_generate_request(MYSQLND_STMT * const s, zend_uchar ** request, size_t *request_len, zend_bool * free_buffer);
 
 static void mysqlnd_stmt_separate_result_bind(MYSQLND_STMT * const stmt);
-static void mysqlnd_stmt_separate_one_result_bind(MYSQLND_STMT * const stmt, const unsigned int param_no);
 
 /* {{{ mysqlnd_stmt::store_result */
 static MYSQLND_RES *
@@ -111,7 +108,7 @@ MYSQLND_METHOD(mysqlnd_stmt, store_result)(MYSQLND_STMT * const s)
 			}
 			/* Position at the first row */
 			set->data_cursor = set->data;
-		} else if (result->stored_data->type == MYSQLND_BUFFERED_TYPE_ZVAL) {
+		} else if (result->stored_data->type == MYSQLND_BUFFERED_TYPE_C) {
 			/*TODO*/
 		}
 
@@ -121,9 +118,11 @@ MYSQLND_METHOD(mysqlnd_stmt, store_result)(MYSQLND_STMT * const s)
 		stmt->state = MYSQLND_STMT_USE_OR_STORE_CALLED;
 	} else {
 		COPY_CLIENT_ERROR(conn->error_info, result->stored_data->error_info);
+		COPY_CLIENT_ERROR(stmt->error_info, result->stored_data->error_info);
 		stmt->result->m.free_result_contents(stmt->result);
 		stmt->result = NULL;
 		stmt->state = MYSQLND_STMT_PREPARED;
+		DBG_RETURN(NULL);
 	}
 
 	DBG_RETURN(result);
@@ -151,13 +150,19 @@ MYSQLND_METHOD(mysqlnd_stmt, get_result)(MYSQLND_STMT * const s)
 	}
 
 	if (stmt->cursor_exists) {
-		/* Silently convert buffered to unbuffered, for now */
-		DBG_RETURN(s->m->use_result(s));
+		/* Prepared statement cursors are not supported as of yet */
+		char * msg;
+		mnd_sprintf(&msg, 0, "%s() cannot be used with cursors", get_active_function_name());
+		SET_CLIENT_ERROR(stmt->error_info, CR_NOT_IMPLEMENTED, UNKNOWN_SQLSTATE, msg);
+		if (msg) {
+			mnd_sprintf_free(msg);
+		}
+		DBG_RETURN(NULL);
 	}
 
 	/* Nothing to store for UPSERT/LOAD DATA*/
 	if (GET_CONNECTION_STATE(&conn->state) != CONN_FETCHING_DATA || stmt->state != MYSQLND_STMT_WAITING_USE_OR_STORE) {
-		SET_CLIENT_ERROR(conn->error_info, CR_COMMANDS_OUT_OF_SYNC, UNKNOWN_SQLSTATE, mysqlnd_out_of_sync);
+		SET_CLIENT_ERROR(stmt->error_info, CR_COMMANDS_OUT_OF_SYNC, UNKNOWN_SQLSTATE, mysqlnd_out_of_sync);
 		DBG_RETURN(NULL);
 	}
 
@@ -178,7 +183,7 @@ MYSQLND_METHOD(mysqlnd_stmt, get_result)(MYSQLND_STMT * const s)
 			break;
 		}
 
-		if ((result = result->m.store_result(result, conn, MYSQLND_STORE_PS | MYSQLND_STORE_NO_COPY))) {
+		if (result->m.store_result(result, conn, MYSQLND_STORE_PS | MYSQLND_STORE_NO_COPY)) {
 			UPSERT_STATUS_SET_AFFECTED_ROWS(stmt->upsert_status, result->stored_data->row_count);
 			stmt->state = MYSQLND_STMT_PREPARED;
 			result->type = MYSQLND_RES_PS_BUF;
@@ -409,6 +414,7 @@ MYSQLND_METHOD(mysqlnd_stmt, prepare)(MYSQLND_STMT * const s, const char * const
 
 		ret = conn->command->stmt_prepare(conn, query_string);
 		if (FAIL == ret) {
+			COPY_CLIENT_ERROR(stmt->error_info, *conn->error_info);
 			goto fail;
 		}
 	}
@@ -535,7 +541,27 @@ mysqlnd_stmt_execute_parse_response(MYSQLND_STMT * const s, enum_mysqlnd_parse_e
 			stmt->result->conn = conn->m->get_reference(conn);
 		}
 
-		/* Update stmt->field_count as SHOW sets it to 0 at prepare */
+		/* If the field count changed, update the result_bind structure. Ideally result_bind
+		 * would only ever be created after execute, in which case the size cannot change anymore,
+		 * but at least in mysqli this does not seem enforceable. */
+		if (stmt->result_bind && conn->field_count != stmt->field_count) {
+			if (conn->field_count < stmt->field_count) {
+				/* Number of columns decreased, free bindings. */
+				for (unsigned i = conn->field_count; i < stmt->field_count; i++) {
+					zval_ptr_dtor(&stmt->result_bind[i].zv);
+				}
+			}
+			stmt->result_bind =
+				mnd_erealloc(stmt->result_bind, conn->field_count * sizeof(MYSQLND_RESULT_BIND));
+			if (conn->field_count > stmt->field_count) {
+				/* Number of columns increase, initialize new ones. */
+				for (unsigned i = stmt->field_count; i < conn->field_count; i++) {
+					ZVAL_UNDEF(&stmt->result_bind[i].zv);
+					stmt->result_bind[i].bound = false;
+				}
+			}
+		}
+
 		stmt->field_count = stmt->result->field_count = conn->field_count;
 		if (stmt->result->stored_data) {
 			stmt->result->stored_data->lengths = NULL;
@@ -881,9 +907,13 @@ mysqlnd_stmt_fetch_row_unbuffered(MYSQLND_RES * result, void * param, const unsi
 	} else if (ret == FAIL) {
 		if (row_packet->error_info.error_no) {
 			COPY_CLIENT_ERROR(conn->error_info, row_packet->error_info);
-			COPY_CLIENT_ERROR(stmt->error_info, row_packet->error_info);
+			if (stmt) {
+				COPY_CLIENT_ERROR(stmt->error_info, row_packet->error_info);
+			}
 		}
-		SET_CONNECTION_STATE(&conn->state, CONN_READY);
+		if (GET_CONNECTION_STATE(&conn->state) != CONN_QUIT_SENT) {
+			SET_CONNECTION_STATE(&conn->state, CONN_READY);
+		}
 		result->unbuf->eof_reached = TRUE; /* so next time we won't get an error */
 	} else if (row_packet->eof) {
 		DBG_INF("EOF");
@@ -1301,7 +1331,7 @@ MYSQLND_METHOD(mysqlnd_stmt, send_long_data)(MYSQLND_STMT * const s, unsigned in
 		  max_allowed_packet_size on the server and resending the data.
 		*/
 #ifdef MYSQLND_DO_WIRE_CHECK_BEFORE_COMMAND
-#if HAVE_USLEEP && !defined(PHP_WIN32)
+#if defined(HAVE_USLEEP) && !defined(PHP_WIN32)
 		usleep(120000);
 #endif
 		if ((packet_len = conn->protocol_frame_codec->m.consume_uneaten_data(conn->protocol_frame_codec, COM_STMT_SEND_LONG_DATA))) {
@@ -1566,22 +1596,13 @@ MYSQLND_METHOD(mysqlnd_stmt, bind_one_result)(MYSQLND_STMT * const s, unsigned i
 	SET_EMPTY_ERROR(conn->error_info);
 
 	if (stmt->field_count) {
-		mysqlnd_stmt_separate_one_result_bind(s, param_no);
-		/* Guaranteed is that stmt->result_bind is NULL */
 		if (!stmt->result_bind) {
 			stmt->result_bind = mnd_ecalloc(stmt->field_count, sizeof(MYSQLND_RESULT_BIND));
-		} else {
-			stmt->result_bind = mnd_erealloc(stmt->result_bind, stmt->field_count * sizeof(MYSQLND_RESULT_BIND));
 		}
-		if (!stmt->result_bind) {
-			DBG_RETURN(FAIL);
+		if (stmt->result_bind[param_no].bound) {
+			zval_ptr_dtor(&stmt->result_bind[param_no].zv);
 		}
 		ZVAL_NULL(&stmt->result_bind[param_no].zv);
-		/*
-		  Don't update is_ref !!! it's not our job
-		  Otherwise either 009.phpt or mysqli_stmt_bind_result.phpt
-		  will fail.
-		*/
 		stmt->result_bind[param_no].bound = TRUE;
 	}
 	DBG_INF("PASS");
@@ -1798,8 +1819,8 @@ MYSQLND_METHOD(mysqlnd_stmt, attr_set)(MYSQLND_STMT * const s,
 			break;
 		}
 		case STMT_ATTR_CURSOR_TYPE: {
-			unsigned int ival = *(unsigned int *) value;
-			if (ival > (zend_ulong) CURSOR_TYPE_READ_ONLY) {
+			unsigned long ival = *(unsigned long *) value;
+			if (ival > (unsigned long) CURSOR_TYPE_READ_ONLY) {
 				SET_CLIENT_ERROR(stmt->error_info, CR_NOT_IMPLEMENTED, UNKNOWN_SQLSTATE, "Not implemented");
 				DBG_INF("FAIL");
 				DBG_RETURN(FAIL);
@@ -1808,7 +1829,7 @@ MYSQLND_METHOD(mysqlnd_stmt, attr_set)(MYSQLND_STMT * const s,
 			break;
 		}
 		case STMT_ATTR_PREFETCH_ROWS: {
-			unsigned int ival = *(unsigned int *) value;
+			unsigned long ival = *(unsigned long *) value;
 			if (ival == 0) {
 				ival = MYSQLND_DEFAULT_PREFETCH_ROWS;
 			} else if (ival > 1) {
@@ -1847,10 +1868,10 @@ MYSQLND_METHOD(mysqlnd_stmt, attr_get)(const MYSQLND_STMT * const s,
 			*(zend_bool *) value= stmt->update_max_length;
 			break;
 		case STMT_ATTR_CURSOR_TYPE:
-			*(zend_ulong *) value= stmt->flags;
+			*(unsigned long *) value= stmt->flags;
 			break;
 		case STMT_ATTR_PREFETCH_ROWS:
-			*(zend_ulong *) value= stmt->prefetch_rows;
+			*(unsigned long *) value= stmt->prefetch_rows;
 			break;
 		default:
 			DBG_RETURN(FAIL);
@@ -1910,10 +1931,6 @@ MYSQLND_METHOD(mysqlnd_stmt, free_result)(MYSQLND_STMT * const s)
 		stmt->state = MYSQLND_STMT_PREPARED;
 	}
 
-	if (GET_CONNECTION_STATE(&conn->state) != CONN_QUIT_SENT) {
-		SET_CONNECTION_STATE(&conn->state, CONN_READY);
-	}
-
 	DBG_RETURN(PASS);
 }
 /* }}} */
@@ -1951,37 +1968,6 @@ mysqlnd_stmt_separate_result_bind(MYSQLND_STMT * const s)
 
 	s->m->free_result_bind(s, stmt->result_bind);
 	stmt->result_bind = NULL;
-
-	DBG_VOID_RETURN;
-}
-/* }}} */
-
-
-/* {{{ mysqlnd_stmt_separate_one_result_bind */
-static void
-mysqlnd_stmt_separate_one_result_bind(MYSQLND_STMT * const s, const unsigned int param_no)
-{
-	MYSQLND_STMT_DATA * stmt = s? s->data : NULL;
-	DBG_ENTER("mysqlnd_stmt_separate_one_result_bind");
-	if (!stmt) {
-		DBG_VOID_RETURN;
-	}
-	DBG_INF_FMT("stmt=%lu result_bind=%p field_count=%u param_no=%u", stmt->stmt_id, stmt->result_bind, stmt->field_count, param_no);
-
-	if (!stmt->result_bind) {
-		DBG_VOID_RETURN;
-	}
-
-	/*
-	  Because only the bound variables can point to our internal buffers, then
-	  separate or free only them. Free is possible because the user could have
-	  lost reference.
-	*/
-	/* Let's try with no cache */
-	if (stmt->result_bind[param_no].bound == TRUE) {
-		DBG_INF_FMT("%u has refcount=%u", param_no, Z_REFCOUNTED(stmt->result_bind[param_no].zv)? Z_REFCOUNT(stmt->result_bind[param_no].zv) : 0);
-		zval_ptr_dtor(&stmt->result_bind[param_no].zv);
-	}
 
 	DBG_VOID_RETURN;
 }

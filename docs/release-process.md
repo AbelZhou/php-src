@@ -91,7 +91,14 @@
  5. Bump the version numbers in `main/php_version.h`, `Zend/zend.h`,
     `configure.ac` and possibly `NEWS`. Do not use abbreviations for alpha and
     beta. Do not use dashes, you should `#define PHP_VERSION "7.4.22RC1"` and
-    not `#define PHP_VERSION "7.4.22-RC1"`
+    not `#define PHP_VERSION "7.4.22-RC1"`.
+
+    When releasing the first release candidate, you must also bump the API
+    version numbers in `Zend/zend_extensions.h`, `Zend/zend_modules.h`, and
+    `main/php.h`. The API versions between the alpha/beta/.0RCx releases can be
+    left the same, or bumped as little as possible because PHP extensions will
+    need to be rebuilt with each bump. Do *not* bump the API versions after
+    RC1.
 
  6. Compile and run `make test`, with and without ZTS, using the right Bison and
     re2c version (for PHP 7.4, minimum Bison 3.0.0 and re2c 0.13.4 are used).
@@ -118,7 +125,7 @@
     changes to the main branch.
 
 11. Push the changes to the main repo, the tag, the main branch and the release
-    branch. Release branches for alpha/beta/.0RCx releases before to GA release
+    branch. Release branches for alpha/beta/.0RCx releases before the GA release
     don't need to be pushed (a local temporary branch should be used).
 
     ```sh
@@ -196,6 +203,8 @@
     ssh lists.php.net
     sudo -u ezmlm ezmlm-sub ~ezmlm/primary-qa-tester/mod moderator-email-address
     ```
+ 6. For RCs, post tweet with release announcement (and link to news article on
+    php.net) ([@official_php](https://twitter.com/official_php))  
 
 ## Rolling a stable release
 
@@ -279,17 +288,27 @@
     * Make sure there are no outdated "notes" or edited "date" keys in the
       `$RELEASES[X][$PHP_X_VERSION]["source"]` array.
 
- 3. Create the release file (`releases/x_y_z.php`)
+ 3. Create the release file (`releases/x_y_z.php`):
 
-    Usually we use the same content as for point 6, but included in php template
-    instead of the release xml.
+    Optionally use `phpweb/bin/createReleaseEntry -v x.y.z -r` to create
+    a standard announcement template for this and step 6.
+    Add `--security` for a security release.
+
+    Usually we use the same content as for point 6, but included in php
+    template instead of the release xml.
+
+    Edit the generated files to expand on the base message if needed.
 
  4. Update `php-qa/include/release-qa.php` and add the next version as an
-    QARELEASE (prepare for next RC).
+    QARELEASE (prepare for next RC). Keep `active => true` until there will be
+    no more QA releases. Setting the release number to 0 is sufficient to
+    remove the old QA release from the available QA releases list.
 
  5. Update the ChangeLog file for the given major version
 
     e.g. `ChangeLog-7.php` from the `NEWS` file
+
+    * You may want to try `php-web/bin/news2html` to automate this task.
 
     * Go over the list and put every element on one line.
     * Check for `&`, `<` and `>` and escape them if necessary.
@@ -306,14 +325,12 @@
 
         V. `s/FR #\([0-9]\+\)/FR <?php bugl(\1); ?>/`
 
-    * You may want to try `php-web/bin/news2html` to automate this task.
-
  6. Add a short notice to phpweb stating that there is a new release, and
     highlight the major important things (security fixes) and when it is
     important to upgrade.
 
-    * Call `php bin/createNewsEntry` in your local phpweb checkout.
-    * Add the content for the news entry.
+    * Call `php bin/createReleaseEntry -v <version> [ --security ]` in your
+      local phpweb checkout.
 
  7. Commit and push all the changes to their respective git repos
 
@@ -332,6 +349,9 @@
     php-announce@ is its own completely separate email. This is to make sure
     that replies to the announcement on php-general@ or internals@ will not
     accidentally hit the php-announce@ mailinglist.
+    
+11. Post tweet with release announcement and link to news article on php.net 
+    ([@official_php](https://twitter.com/official_php))  
 
 ## Re-releasing the same version (or -pl)
 
@@ -350,8 +370,8 @@
     highlight the major important things (security fixes) and when it is
     important to upgrade.
 
-    * Call `php bin/createNewsEntry` in your local phpweb checkout.
-    * Add the content for the news entry.
+    * Call `php bin/createReleaseEntry -v <version> [ --security ]` in your
+      local phpweb checkout.
 
  4. Commit all the changes (`include/version.inc`, `archive/archive.xml`,
     `archive/entries/YYYY-MM-DD-N.xml`).
@@ -378,8 +398,13 @@
     Add a commit on master after the branch point clearing the `NEWS`,
     `UPGRADING` and `UPGRADING.INTERNALS` files, updating the version in
     `configure.ac` (run `./configure` to automatically update
-    `main/php_versions.h`, too) and `Zend/zend.h`. Also list the new branch in
-    `CONTRIBUTING.md`.
+    `main/php_versions.h`, too) and `Zend/zend.h`. Bump the default initial
+    version also in `win32/build/confutils.js`.
+
+    Also list the new branch in `CONTRIBUTING.md`.
+
+    Bump API version numbers in `Zend/zend_extensions.h`, `Zend/zend_modules.h`,
+    and `main/php.h`.
 
     Example: https://git.php.net/?p=php-src.git;a=commit;h=a63c99b
     Push the new branch and the commit just added to master.
@@ -406,7 +431,14 @@
  2. Timely get used to the differences in preparing and announcing a stable
     release.
 
+ 3. Before releasing X.Y.0, merge the NEWS entries of the pre-releases, so that
+    there is only a single section about PHP X.Y.0, instead of individual
+    sections for each pre-release.
+
 ## Prime the selection of the Release Managers of the next version
+
+This should be done by one of the release managers of the latest release
+branch:
 
  1. About three months before the scheduled release of the first alpha of the
     next minor or major release, issue a call for volunteers on
@@ -428,6 +460,8 @@
     `gpg --fingerprint "$USER@php.net"`. Let one or more of the previous RMs
     sign your key. Publish your public key to pgp.mit.edu with:
     `gpg --keyserver pgp.mit.edu --send-keys $KEYID`
+    Add new keys in the php-keyring.gpg in distribution repository using:
+    `gpg2 --export --export-options export-minimal --armor <all RM keys>`
 
  3. Request karma to edit `main/php_version.h` and `Zend/zend.h`. Possibly karma
     for other restricted parts of php-src might come in question. To edit

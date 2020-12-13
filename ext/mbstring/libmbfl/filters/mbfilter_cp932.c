@@ -27,17 +27,13 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include "mbfilter.h"
 #include "mbfilter_cp932.h"
 
 #include "unicode_table_cp932_ext.h"
 #include "unicode_table_jis.h"
 
-static int mbfl_filt_ident_cp932(int c, mbfl_identify_filter *filter);
+static int mbfl_filt_conv_cp932_wchar_flush(mbfl_convert_filter *filter);
 
 static const unsigned char mblen_table_sjis[] = { /* 0x80-0x9f,0xE0-0xFF */
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -64,36 +60,31 @@ const mbfl_encoding mbfl_encoding_cp932 = {
 	mbfl_no_encoding_cp932,
 	"CP932",
 	"Shift_JIS",
-	(const char *(*)[])&mbfl_encoding_cp932_aliases,
+	mbfl_encoding_cp932_aliases,
 	mblen_table_sjis,
 	MBFL_ENCTYPE_MBCS | MBFL_ENCTYPE_GL_UNSAFE,
 	&vtbl_cp932_wchar,
 	&vtbl_wchar_cp932
 };
 
-const struct mbfl_identify_vtbl vtbl_identify_cp932 = {
-	mbfl_no_encoding_cp932,
-	mbfl_filt_ident_common_ctor,
-	mbfl_filt_ident_common_dtor,
-	mbfl_filt_ident_cp932
-};
-
 const struct mbfl_convert_vtbl vtbl_cp932_wchar = {
 	mbfl_no_encoding_cp932,
 	mbfl_no_encoding_wchar,
 	mbfl_filt_conv_common_ctor,
-	mbfl_filt_conv_common_dtor,
+	NULL,
 	mbfl_filt_conv_cp932_wchar,
-	mbfl_filt_conv_common_flush
+	mbfl_filt_conv_cp932_wchar_flush,
+	NULL,
 };
 
 const struct mbfl_convert_vtbl vtbl_wchar_cp932 = {
 	mbfl_no_encoding_wchar,
 	mbfl_no_encoding_cp932,
 	mbfl_filt_conv_common_ctor,
-	mbfl_filt_conv_common_dtor,
+	NULL,
 	mbfl_filt_conv_wchar_cp932,
-	mbfl_filt_conv_common_flush
+	mbfl_filt_conv_common_flush,
+	NULL,
 };
 
 #define CK(statement)	do { if ((statement) < 0) return (-1); } while (0)
@@ -204,17 +195,11 @@ mbfl_filt_conv_cp932_wchar(int c, mbfl_convert_filter *filter)
 				}
 			}
 			if (w <= 0) {
-				w = (s1 << 8) | s2;
-				w &= MBFL_WCSPLANE_MASK;
-				w |= MBFL_WCSPLANE_WINCP932;
+				w = (s1 << 8) | s2 | MBFL_WCSPLANE_WINCP932;
 			}
 			CK((*filter->output_function)(w, filter->data));
-		} else if ((c >= 0 && c < 0x21) || c == 0x7f) {		/* CTLs */
-			CK((*filter->output_function)(c, filter->data));
 		} else {
-			w = (c1 << 8) | c;
-			w &= MBFL_WCSGROUP_MASK;
-			w |= MBFL_WCSGROUP_THROUGH;
+			w = (c1 << 8) | c | MBFL_WCSGROUP_THROUGH;
 			CK((*filter->output_function)(w, filter->data));
 		}
 		break;
@@ -225,6 +210,19 @@ mbfl_filt_conv_cp932_wchar(int c, mbfl_convert_filter *filter)
 	}
 
 	return c;
+}
+
+static int mbfl_filt_conv_cp932_wchar_flush(mbfl_convert_filter *filter)
+{
+	if (filter->status) {
+		(*filter->filter_function)(filter->cache | MBFL_WCSGROUP_THROUGH, filter);
+	}
+
+	if (filter->flush_function) {
+		(*filter->flush_function)(filter->data);
+	}
+
+	return 0;
 }
 
 /*
@@ -253,23 +251,10 @@ mbfl_filt_conv_wchar_cp932(int c, mbfl_convert_filter *filter)
 		s2 = 1;
 	}
 	if (s1 <= 0) {
-		c1 = c & ~MBFL_WCSPLANE_MASK;
-		if (c1 == MBFL_WCSPLANE_WINCP932) {
-			s1 = c & MBFL_WCSPLANE_MASK;
-			s2 = 1;
-		} else if (c1 == MBFL_WCSPLANE_JIS0208) {
-			s1 = c & MBFL_WCSPLANE_MASK;
-		} else if (c1 == MBFL_WCSPLANE_JIS0212) {
-			s1 = c & MBFL_WCSPLANE_MASK;
-			s1 |= 0x8080;
-		} else if (c == 0xa5) {		/* YEN SIGN */
-			s1 = 0x005c;	/* YEN SIGN */
-		} else if (c == 0x203e) {	/* OVER LINE */
-			s1 = 0x007e;	/* FULLWIDTH MACRON */
+		if (c == 0xa5) { /* YEN SIGN */
+			s1 = 0x216F; /* FULLWIDTH YEN SIGN */
 		} else if (c == 0xff3c) {	/* FULLWIDTH REVERSE SOLIDUS */
 			s1 = 0x2140;
-		} else if (c == 0xff5e) {	/* FULLWIDTH TILDE */
-			s1 = 0x2141;
 		} else if (c == 0x2225) {	/* PARALLEL TO */
 			s1 = 0x2142;
 		} else if (c == 0xff0d) {	/* FULLWIDTH HYPHEN-MINUS */
@@ -321,29 +306,7 @@ mbfl_filt_conv_wchar_cp932(int c, mbfl_convert_filter *filter)
 			CK((*filter->output_function)(s2, filter->data));
 		}
 	} else {
-		if (filter->illegal_mode != MBFL_OUTPUTFILTER_ILLEGAL_MODE_NONE) {
-			CK(mbfl_filt_conv_illegal_output(c, filter));
-		}
-	}
-
-	return c;
-}
-
-static int mbfl_filt_ident_cp932(int c, mbfl_identify_filter *filter)
-{
-	if (filter->status) {		/* kanji second char */
-		if (c < 0x40 || c > 0xfc || c == 0x7f) {	/* bad */
-		    filter->flag = 1;
-		}
-		filter->status = 0;
-	} else if (c >= 0 && c < 0x80) {	/* latin  ok */
-		;
-	} else if (c > 0xa0 && c < 0xe0) {	/* kana  ok */
-		;
-	} else if (c > 0x80 && c < 0xfd && c != 0xa0) {	/* kanji first char */
-		filter->status = 1;
-	} else {							/* bad */
-		filter->flag = 1;
+		CK(mbfl_filt_conv_illegal_output(c, filter));
 	}
 
 	return c;

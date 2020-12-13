@@ -1,7 +1,5 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -95,7 +93,7 @@ mysqlnd_mempool_create(size_t arena_size)
 	MYSQLND_MEMORY_POOL * ret;
 
 	DBG_ENTER("mysqlnd_mempool_create");
-	arena = zend_arena_create(MAX(arena_size, sizeof(zend_arena)));
+	arena = zend_arena_create(MAX(arena_size, ZEND_MM_ALIGNED_SIZE(sizeof(zend_arena))));
 	ret = zend_arena_alloc(&arena, sizeof(MYSQLND_MEMORY_POOL));
 	ret->arena = arena;
 	ret->last = NULL;
@@ -134,6 +132,9 @@ PHPAPI void
 mysqlnd_mempool_restore_state(MYSQLND_MEMORY_POOL * pool)
 {
 	DBG_ENTER("mysqlnd_mempool_restore_state");
+#if ZEND_DEBUG
+	ZEND_ASSERT(pool->checkpoint);
+#endif
 	if (pool->checkpoint) {
 		zend_arena_release(&pool->arena, pool->checkpoint);
 		pool->last = NULL;

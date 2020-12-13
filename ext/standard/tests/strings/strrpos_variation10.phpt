@@ -2,11 +2,6 @@
 Test strrpos() function : usage variations - unexpected inputs for 'needle' argument
 --FILE--
 <?php
-/* Prototype  : int strrpos ( string $haystack, string $needle [, int $offset] );
- * Description: Find position of last occurrence of 'needle' in 'haystack'.
- * Source code: ext/standard/string.c
-*/
-
 /* Test strrpos() function with unexpected inputs for 'needle' and
  *  an expected type of input for 'haystack' argument
 */
@@ -116,37 +111,37 @@ bool(false)
 -- Iteration 9 --
 int(28)
 -- Iteration 10 --
-strrpos() expects parameter 2 to be string, array given
+strrpos(): Argument #2 ($needle) must be of type string, array given
 -- Iteration 11 --
-strrpos() expects parameter 2 to be string, array given
+strrpos(): Argument #2 ($needle) must be of type string, array given
 -- Iteration 12 --
-strrpos() expects parameter 2 to be string, array given
+strrpos(): Argument #2 ($needle) must be of type string, array given
 -- Iteration 13 --
-strrpos() expects parameter 2 to be string, array given
+strrpos(): Argument #2 ($needle) must be of type string, array given
 -- Iteration 14 --
-strrpos() expects parameter 2 to be string, array given
+strrpos(): Argument #2 ($needle) must be of type string, array given
 -- Iteration 15 --
 int(41)
 -- Iteration 16 --
-bool(false)
+int(87)
 -- Iteration 17 --
 int(41)
 -- Iteration 18 --
-bool(false)
+int(87)
 -- Iteration 19 --
 int(64)
 -- Iteration 20 --
-bool(false)
+int(87)
 -- Iteration 21 --
-bool(false)
+int(87)
 -- Iteration 22 --
-bool(false)
+int(87)
 -- Iteration 23 --
-bool(false)
+int(87)
 -- Iteration 24 --
-strrpos() expects parameter 2 to be string, resource given
+strrpos(): Argument #2 ($needle) must be of type string, resource given
 -- Iteration 25 --
-bool(false)
+int(87)
 -- Iteration 26 --
-bool(false)
+int(87)
 *** Done ***

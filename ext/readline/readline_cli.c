@@ -1,7 +1,5 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
@@ -72,7 +70,7 @@
 
 #define DEFAULT_PROMPT "\\b \\> "
 
-ZEND_DECLARE_MODULE_GLOBALS(cli_readline);
+ZEND_DECLARE_MODULE_GLOBALS(cli_readline)
 
 static char php_last_char = '\0';
 static FILE *pager_pipe = NULL;
@@ -252,6 +250,10 @@ static int cli_is_valid_code(char *code, size_t len, zend_string **prompt) /* {{
 						code_type = dstring;
 						break;
 					case '#':
+						if (code[i+1] == '[') {
+							valid_end = 0;
+							break;
+						}
 						code_type = comment_line;
 						break;
 					case '/':
@@ -351,11 +353,14 @@ static int cli_is_valid_code(char *code, size_t len, zend_string **prompt) /* {{
 				break;
 			case heredoc:
 				ZEND_ASSERT(heredoc_tag);
-				if (code[i - (heredoc_len + 1)] == '\n' && !strncmp(code + i - heredoc_len, heredoc_tag, heredoc_len) && code[i] == '\n') {
+				if (!strncmp(code + i - heredoc_len + 1, heredoc_tag, heredoc_len)) {
+					unsigned char c = code[i + 1];
+					char *p = code + i - heredoc_len;
+
+					if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c >= 0x80) break;
+					while (*p == ' ' || *p == '\t') p--;
+					if (*p != '\n') break;
 					code_type = body;
-				} else if (code[i - (heredoc_len + 2)] == '\n' && !strncmp(code + i - heredoc_len - 1, heredoc_tag, heredoc_len) && code[i-1] == ';' && code[i] == '\n') {
-					code_type = body;
-					valid_end = 1;
 				}
 				break;
 			case outside:
@@ -517,7 +522,7 @@ TODO:
 	}
 	if (text[0] == '$') {
 		retval = cli_completion_generator_var(text, textlen, &cli_completion_state);
-	} else if (text[0] == '#') {
+	} else if (text[0] == '#' && text[1] != '[') {
 		retval = cli_completion_generator_ini(text, textlen, &cli_completion_state);
 	} else {
 		char *lc_text, *class_name_end;
@@ -602,7 +607,14 @@ static int readline_shell_run(void) /* {{{ */
 #else
 	spprintf(&history_file, MAX_PATH, "%s/.php_history", getenv("USERPROFILE"));
 #endif
-	rl_attempted_completion_function = cli_code_completion;
+	/* Install the default completion function for 'php -a'.
+	 *
+	 * But if readline_completion_function() was called by PHP code prior to the shell starting
+	 * (e.g. with 'php -d auto_prepend_file=prepend.php -a'),
+	 * then use that instead of PHP's default. */
+	if (rl_attempted_completion_function != php_readline_completion_cb) {
+		rl_attempted_completion_function = cli_code_completion;
+	}
 #ifndef PHP_WIN32
 	rl_special_prefixes = "$";
 #endif
@@ -622,7 +634,7 @@ static int readline_shell_run(void) /* {{{ */
 
 		len = strlen(line);
 
-		if (line[0] == '#') {
+		if (line[0] == '#' && line[1] != '[') {
 			char *param = strstr(&line[1], "=");
 			if (param) {
 				zend_string *cmd;

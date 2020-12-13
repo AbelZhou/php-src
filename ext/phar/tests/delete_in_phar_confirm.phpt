@@ -5,6 +5,7 @@ Phar: delete a file within a .phar (confirm disk file is changed)
 --INI--
 phar.readonly=0
 phar.require_hash=0
+opcache.validate_timestamps=1
 --FILE--
 <?php
 $fname = __DIR__ . '/' . basename(__FILE__, '.php') . '.phar.php';
@@ -15,14 +16,6 @@ $files = array();
 $files['a.php'] = '<?php echo "This is a\n"; ?>';
 $files['b.php'] = '<?php echo "This is b\n"; ?>';
 $files['b/c.php'] = '<?php echo "This is b/c\n"; ?>';
-
-if (function_exists("opcache_get_status")) {
-	$status = opcache_get_status();
-	if ($status["opcache_enabled"]) {
-		ini_set("opcache.revalidate_freq", "0");
-		sleep(2);
-	}
-}
 
 include 'files/phar_test.inc';
 
@@ -42,7 +35,6 @@ include 'phar://' . __DIR__ . '/' . basename(__FILE__, '.php') . '.phar.php/b.ph
 include 'phar://' . __DIR__ . '/' . basename(__FILE__, '.php') . '.phar.php/b/c.php';
 ?>
 
-===DONE===
 --CLEAN--
 <?php unlink(__DIR__ . '/' . basename(__FILE__, '.clean.php') . '.phar.php'); ?>
 --EXPECTF--
@@ -53,8 +45,7 @@ This is b/c
 This is a
 This is b
 
-Warning: include(%sdelete_in_phar_confirm.phar.php/b/c.php): failed to open stream: phar error: "b/c.php" is not a file in phar "%sdelete_in_phar_confirm.phar.php" in %sdelete_in_phar_confirm.php on line %d
+Warning: include(%sdelete_in_phar_confirm.phar.php/b/c.php): Failed to open stream: phar error: "b/c.php" is not a file in phar "%sdelete_in_phar_confirm.phar.php" in %sdelete_in_phar_confirm.php on line %d
 
 Warning: include(): Failed opening 'phar://%sdelete_in_phar_confirm.phar.php/b/c.php' for inclusion (include_path='%s') in %sdelete_in_phar_confirm.php on line %d
 
-===DONE===

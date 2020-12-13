@@ -77,11 +77,10 @@ struct _zend_compiler_globals {
 	HashTable *function_table;	/* function symbol table */
 	HashTable *class_table;		/* class table */
 
-	HashTable filenames_table;
-
 	HashTable *auto_globals;
 
-	zend_bool parse_error;
+	/* Refer to zend_yytnamerr() in zend_language_parser.y for meaning of values */
+	zend_uchar parse_error;
 	zend_bool in_compilation;
 	zend_bool short_tags;
 
@@ -127,6 +126,10 @@ struct _zend_compiler_globals {
 
 	HashTable *delayed_variance_obligations;
 	HashTable *delayed_autoloads;
+
+	uint32_t rtd_key_counter;
+
+	zend_stack short_circuiting_opnums;
 };
 
 
@@ -162,6 +165,8 @@ struct _zend_executor_globals {
 	struct _zend_execute_data *current_execute_data;
 	zend_class_entry *fake_scope; /* used to avoid checks accessing properties */
 
+	uint32_t jit_trace_num; /* Used by tracing JIT to reference the currently running trace */
+
 	zend_long precision;
 
 	int ticks_count;
@@ -171,7 +176,6 @@ struct _zend_executor_globals {
 	uint32_t persistent_classes_count;
 
 	HashTable *in_autoload;
-	zend_function *autoload_func;
 	zend_bool full_tables_cleanup;
 
 	/* for extended information support */
@@ -235,6 +239,9 @@ struct _zend_executor_globals {
 	HashTable weakrefs;
 
 	zend_bool exception_ignore_args;
+	zend_long exception_string_param_max_len;
+
+	zend_get_gc_buffer get_gc_buffer;
 
 	void *reserved[ZEND_MAX_RESERVED_RESOURCES];
 };
@@ -242,6 +249,7 @@ struct _zend_executor_globals {
 #define EG_FLAGS_INITIAL				(0)
 #define EG_FLAGS_IN_SHUTDOWN			(1<<0)
 #define EG_FLAGS_OBJECT_STORE_NO_REUSE	(1<<1)
+#define EG_FLAGS_IN_RESOURCE_SHUTDOWN	(1<<2)
 
 struct _zend_ini_scanner_globals {
 	zend_file_handle *yy_in;
@@ -282,6 +290,7 @@ struct _zend_php_scanner_globals {
 	int yy_state;
 	zend_stack state_stack;
 	zend_ptr_stack heredoc_label_stack;
+	zend_stack nest_location_stack; /* for syntax error reporting */
 	zend_bool heredoc_scan_ahead;
 	int heredoc_indentation;
 	zend_bool heredoc_indentation_uses_spaces;
@@ -303,7 +312,9 @@ struct _zend_php_scanner_globals {
 	int scanned_string_len;
 
 	/* hooks */
-	void (*on_event)(zend_php_scanner_event event, int token, int line, void *context);
+	void (*on_event)(
+		zend_php_scanner_event event, int token, int line,
+		const char *text, size_t length, void *context);
 	void *on_event_context;
 };
 

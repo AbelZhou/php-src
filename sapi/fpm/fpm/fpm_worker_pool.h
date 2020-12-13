@@ -21,6 +21,7 @@ enum fpm_address_domain {
 struct fpm_worker_pool_s {
 	struct fpm_worker_pool_s *next; //Next worker
 	struct fpm_worker_pool_config_s *config; //php-fpm.conf
+	struct fpm_worker_pool_s *shared;
 	char *user, *home;									/* for setting env USER and HOME */
 	enum fpm_address_domain listen_address_domain;
 	int listening_socket;          //套接字

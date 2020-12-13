@@ -25,7 +25,7 @@
 
 ZEND_DLIMPORT int isatty(int fd);
 
-static size_t zend_stream_stdio_reader(void *handle, char *buf, size_t len) /* {{{ */
+static ssize_t zend_stream_stdio_reader(void *handle, char *buf, size_t len) /* {{{ */
 {
 	return fread(buf, 1, len, (FILE*)handle);
 } /* }}} */
@@ -73,7 +73,7 @@ ZEND_API void zend_stream_init_filename(zend_file_handle *handle, const char *fi
 	handle->filename = filename;
 }
 
-ZEND_API int zend_stream_open(const char *filename, zend_file_handle *handle) /* {{{ */
+ZEND_API zend_result zend_stream_open(const char *filename, zend_file_handle *handle) /* {{{ */
 {
 	zend_string *opened_path;
 	if (zend_stream_open_function) {
@@ -95,7 +95,7 @@ static int zend_stream_getc(zend_file_handle *file_handle) /* {{{ */
 	return EOF;
 } /* }}} */
 
-static size_t zend_stream_read(zend_file_handle *file_handle, char *buf, size_t len) /* {{{ */
+static ssize_t zend_stream_read(zend_file_handle *file_handle, char *buf, size_t len) /* {{{ */
 {
 	if (file_handle->handle.stream.isatty) {
 		int c = '*';
@@ -113,9 +113,9 @@ static size_t zend_stream_read(zend_file_handle *file_handle, char *buf, size_t 
 	return file_handle->handle.stream.reader(file_handle->handle.stream.handle, buf, len);
 } /* }}} */
 
-ZEND_API int zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t *len) /* {{{ */
+ZEND_API zend_result zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t *len) /* {{{ */
 {
-	size_t size;
+	size_t file_size;
 
 	if (file_handle->buf) {
 		*buf = file_handle->buf;
@@ -142,18 +142,28 @@ ZEND_API int zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t
 		file_handle->handle.stream.fsizer = (zend_stream_fsizer_t)zend_stream_stdio_fsizer;
 	}
 
-	size = zend_stream_fsize(file_handle);
-	if (size == (size_t)-1) {
+	file_size = zend_stream_fsize(file_handle);
+	if (file_size == (size_t)-1) {
 		return FAILURE;
 	}
 
-	if (size) {
-		file_handle->buf = *buf = safe_emalloc(1, size, ZEND_MMAP_AHEAD);
-		file_handle->len = zend_stream_read(file_handle, *buf, size);
+	if (file_size) {
+		ssize_t read;
+		size_t size = 0;
+		*buf = safe_emalloc(1, file_size, ZEND_MMAP_AHEAD);
+		while ((read = zend_stream_read(file_handle, *buf + size, file_size - size)) > 0) {
+			size += read;
+		}
+		if (read < 0) {
+			efree(*buf);
+			return FAILURE;
+		}
+		file_handle->buf = *buf;
+		file_handle->len = size;
 	} else {
-		size_t read, remain = 4*1024;
+		size_t size = 0, remain = 4*1024;
+		ssize_t read;
 		*buf = emalloc(remain);
-		size = 0;
 
 		while ((read = zend_stream_read(file_handle, *buf + size, remain)) > 0) {
 			size   += read;
@@ -164,6 +174,11 @@ ZEND_API int zend_stream_fixup(zend_file_handle *file_handle, char **buf, size_t
 				remain = size;
 			}
 		}
+		if (read < 0) {
+			efree(*buf);
+			return FAILURE;
+		}
+
 		file_handle->len = size;
 		if (size && remain < ZEND_MMAP_AHEAD) {
 			*buf = safe_erealloc(*buf, size, 1, ZEND_MMAP_AHEAD);
@@ -210,15 +225,22 @@ ZEND_API void zend_file_handle_dtor(zend_file_handle *fh) /* {{{ */
 		efree(fh->buf);
 		fh->buf = NULL;
 	}
+	if (fh->free_filename && fh->filename) {
+		efree((char*)fh->filename);
+		fh->filename = NULL;
+	}
 }
 /* }}} */
 
+/* return int to be compatible with Zend linked list API */
 ZEND_API int zend_compare_file_handles(zend_file_handle *fh1, zend_file_handle *fh2) /* {{{ */
 {
 	if (fh1->type != fh2->type) {
 		return 0;
 	}
 	switch (fh1->type) {
+		case ZEND_HANDLE_FILENAME:
+			return strcmp(fh1->filename, fh2->filename) == 0;
 		case ZEND_HANDLE_FP:
 			return fh1->handle.fp == fh2->handle.fp;
 		case ZEND_HANDLE_STREAM:

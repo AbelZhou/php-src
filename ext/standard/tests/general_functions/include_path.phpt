@@ -6,34 +6,32 @@ include_path=.
 <?php
 
 var_dump(get_include_path());
-
-var_dump(restore_include_path());
+var_dump(ini_restore("include_path"));
 
 var_dump(set_include_path("var"));
 var_dump(get_include_path());
 
-var_dump(restore_include_path());
+var_dump(ini_restore("include_path"));
 var_dump(get_include_path());
 
 var_dump(set_include_path(".:/path/to/dir"));
 var_dump(get_include_path());
 
-var_dump(restore_include_path());
+var_dump(ini_restore("include_path"));
 var_dump(get_include_path());
 
 var_dump(set_include_path(""));
 var_dump(get_include_path());
 
-var_dump(restore_include_path());
+var_dump(ini_restore("include_path"));
 var_dump(get_include_path());
 
-var_dump(restore_include_path());
+var_dump(ini_restore("include_path"));
 var_dump(get_include_path());
-
 
 echo "Done\n";
 ?>
---EXPECTF--
+--EXPECT--
 string(1) "."
 NULL
 string(1) "."

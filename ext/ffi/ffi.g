@@ -1,7 +1,5 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
@@ -16,6 +14,11 @@
    +----------------------------------------------------------------------+
 */
 
+/*
+To generate ffi_parser.c use llk <https://github.com/dstogov/llk>:
+php llk.php ffi.g
+*/
+
 %start          declarations
 %sub-start      type_name
 %case-sensetive true
@@ -26,8 +29,6 @@
 
 %{
 /*
-   +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
    +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
@@ -122,14 +123,6 @@ declaration_specifiers(zend_ffi_dcl *dcl):
 			{dcl->flags |= ZEND_FFI_DCL_INLINE;}
 		|	"_Noreturn"
 			{dcl->flags |= ZEND_FFI_DCL_NO_RETURN;}
-		|	"__cdecl"
-			{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_CDECL);}
-		|	"__stdcall"
-			{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_STDCALL);}
-		|	"__fastcall"
-			{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_FASTCALL);}
-		|	"__thiscall"
-			{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_THISCALL);}
 		|	"_Alignas"
 			"("
 			(	&type_name_start
@@ -216,7 +209,7 @@ type_specifier(zend_ffi_dcl *dcl):
 	|	{if (dcl->flags & ZEND_FFI_DCL_TYPE_SPECIFIERS) yy_error_sym("unexpected", sym);}
 		"_Bool"
 		{dcl->flags |= ZEND_FFI_DCL_BOOL;}
-	|	{if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_LONG))) yy_error_sym("Unexpected '%s'", sym);}
+	|	{if (dcl->flags & (ZEND_FFI_DCL_TYPE_SPECIFIERS-(ZEND_FFI_DCL_FLOAT|ZEND_FFI_DCL_DOUBLE|ZEND_FFI_DCL_LONG))) yy_error_sym("unexpected", sym);}
 		("_Complex"|"complex"|"__complex"|"__complex__")
 		{dcl->flags |= ZEND_FFI_DCL_COMPLEX;}
 //	|	"_Atomic" "(" type_name ")" // TODO: not-implemented ???
@@ -487,6 +480,16 @@ attributes(zend_ffi_dcl *dcl):
 				)?
 			)+
 		")"
+	|	"__cdecl"
+		{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_CDECL);}
+	|	"__stdcall"
+		{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_STDCALL);}
+	|	"__fastcall"
+		{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_FASTCALL);}
+	|	"__thiscall"
+		{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_THISCALL);}
+	|	"__vectorcall"
+		{zend_ffi_set_abi(dcl, ZEND_FFI_ABI_VECTORCALL);}
 	)++
 ;
 

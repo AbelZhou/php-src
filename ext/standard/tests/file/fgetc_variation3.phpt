@@ -3,7 +3,6 @@ Test fgetc() function : usage variations - write only modes (Bug #42036)
 --FILE--
 <?php
 /*
- Prototype: string fgetc ( resource $handle );
  Description: Gets character from file pointer
 */
 
@@ -49,12 +48,14 @@ foreach ($file_modes as $file_mode ) {
 
 echo "Done\n";
 ?>
---EXPECT--
+--EXPECTF--
 *** Testing fgetc() with file opened in write only mode ***
 -- File opened in mode : w --
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -62,6 +63,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -69,6 +72,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -76,6 +81,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -83,6 +90,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -90,6 +99,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -97,6 +108,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -104,6 +117,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)
@@ -111,6 +126,8 @@ bool(false)
 bool(true)
 int(0)
 bool(false)
+
+Notice: fgetc(): Read of 8192 bytes failed with errno=9 Bad file descriptor in %s on line %d
 bool(false)
 int(0)
 bool(false)

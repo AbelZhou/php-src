@@ -1,5 +1,5 @@
 --TEST--
-Test usage of ReflectionClassConstant methods __toString(), export(), getName(), getValue(), isPublic(), isPrivate(), isProtected(), getModifiers(), getDeclaringClass() and getDocComment().
+Test usage of ReflectionClassConstant methods __toString(), getName(), getValue(), isPublic(), isPrivate(), isProtected(), getModifiers(), getDeclaringClass() and getDocComment().
 --FILE--
 <?php
 
@@ -10,10 +10,6 @@ function reflectClassConstant($base, $constant) {
     echo "Reflecting on class constant $class::$constant\n\n";
     echo "__toString():\n";
     var_dump($constInfo->__toString());
-    echo "export():\n";
-    var_dump(ReflectionClassConstant::export($base, $constant, true));
-    echo "export():\n";
-    var_dump(ReflectionClassConstant::export($base, $constant, false));
     echo "getName():\n";
     var_dump($constInfo->getName());
     echo "getValue():\n";
@@ -55,13 +51,6 @@ Reflecting on class constant TestClass::PUB
 __toString():
 string(35) "Constant [ public bool PUB ] { 1 }
 "
-export():
-string(35) "Constant [ public bool PUB ] { 1 }
-"
-export():
-Constant [ public bool PUB ] { 1 }
-
-NULL
 getName():
 string(3) "PUB"
 getValue():
@@ -89,13 +78,6 @@ Reflecting on class constant TestClass::PROT
 __toString():
 string(38) "Constant [ protected int PROT ] { 4 }
 "
-export():
-string(38) "Constant [ protected int PROT ] { 4 }
-"
-export():
-Constant [ protected int PROT ] { 4 }
-
-NULL
 getName():
 string(4) "PROT"
 getValue():
@@ -123,13 +105,6 @@ Reflecting on class constant TestClass::PRIV
 __toString():
 string(45) "Constant [ private string PRIV ] { keepOut }
 "
-export():
-string(45) "Constant [ private string PRIV ] { keepOut }
-"
-export():
-Constant [ private string PRIV ] { keepOut }
-
-NULL
 getName():
 string(4) "PRIV"
 getValue():
@@ -157,13 +132,6 @@ Reflecting on class constant TestClass::PRIV
 __toString():
 string(45) "Constant [ private string PRIV ] { keepOut }
 "
-export():
-string(45) "Constant [ private string PRIV ] { keepOut }
-"
-export():
-Constant [ private string PRIV ] { keepOut }
-
-NULL
 getName():
 string(4) "PRIV"
 getValue():
@@ -186,7 +154,7 @@ bool(false)
 
 **********************************
 
-Fatal error: Uncaught ReflectionException: Class Constant TestClass::BAD_CONST does not exist in %s:%d
+Fatal error: Uncaught ReflectionException: Constant TestClass::BAD_CONST does not exist in %s:%d
 Stack trace:
 #0 %s(%d): ReflectionClassConstant->__construct(Object(TestClass), 'BAD_CONST')
 #1 %s(%d): reflectClassConstant(Object(TestClass), 'BAD_CONST')

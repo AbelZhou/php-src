@@ -1,7 +1,5 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
@@ -385,9 +383,12 @@ zend_string *php_base64_decode_ex_default(const unsigned char *str, size_t lengt
 PHPAPI zend_string *php_base64_encode(const unsigned char *str, size_t length) __attribute__((ifunc("resolve_base64_encode")));
 PHPAPI zend_string *php_base64_decode_ex(const unsigned char *str, size_t length, zend_bool strict) __attribute__((ifunc("resolve_base64_decode")));
 
+typedef zend_string *(*base64_encode_func_t)(const unsigned char *, size_t);
+typedef zend_string *(*base64_decode_func_t)(const unsigned char *, size_t, zend_bool);
+
 ZEND_NO_SANITIZE_ADDRESS
 ZEND_ATTRIBUTE_UNUSED /* clang mistakenly warns about this */
-static void *resolve_base64_encode() {
+static base64_encode_func_t resolve_base64_encode() {
 # if ZEND_INTRIN_AVX2_FUNC_PROTO
 	if (zend_cpu_supports_avx2()) {
 		return php_base64_encode_avx2;
@@ -403,7 +404,7 @@ static void *resolve_base64_encode() {
 
 ZEND_NO_SANITIZE_ADDRESS
 ZEND_ATTRIBUTE_UNUSED /* clang mistakenly warns about this */
-static void *resolve_base64_decode() {
+static base64_decode_func_t resolve_base64_decode() {
 # if ZEND_INTRIN_AVX2_FUNC_PROTO
 	if (zend_cpu_supports_avx2()) {
 		return php_base64_decode_ex_avx2;
@@ -669,39 +670,6 @@ zend_string *php_base64_encode_ssse3(const unsigned char *str, size_t length)
 
 /* }}} */
 
-/* {{{ php_base64_decode_ex */
-/* generate reverse table (do not set index 0 to 64)
-static unsigned short base64_reverse_table[256];
-#define rt base64_reverse_table
-void php_base64_init(void)
-{
-	char *s = emalloc(10240), *sp;
-	char *chp;
-	short idx;
-
-	for(ch = 0; ch < 256; ch++) {
-		chp = strchr(base64_table, ch);
-		if(ch && chp) {
-			idx = chp - base64_table;
-			if (idx >= 64) idx = -1;
-			rt[ch] = idx;
-		} else {
-			rt[ch] = -1;
-		}
-	}
-	sp = s;
-	sprintf(sp, "static const short base64_reverse_table[256] = {\n");
-	for(ch =0; ch < 256;) {
-		sp = s+strlen(s);
-		sprintf(sp, "\t% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,% 3d,\n", rt[ch+0], rt[ch+1], rt[ch+2], rt[ch+3], rt[ch+4], rt[ch+5], rt[ch+6], rt[ch+7], rt[ch+8], rt[ch+9], rt[ch+10], rt[ch+11], rt[ch+12], rt[ch+13], rt[ch+14], rt[ch+15]);
-		ch += 16;
-	}
-	sprintf(sp, "};");
-	php_error_docref(NULL, E_NOTICE, "Reverse_table:\n%s", s);
-	efree(s);
-}
-*/
-
 #if ZEND_INTRIN_AVX2_NATIVE || ZEND_INTRIN_AVX2_RESOLVER
 # if ZEND_INTRIN_AVX2_RESOLVER && defined(HAVE_FUNC_ATTRIBUTE_TARGET)
 static __m256i php_base64_decode_avx2_reshuffle(__m256i in) __attribute__((target("avx2")));
@@ -957,8 +925,7 @@ PHPAPI zend_string *php_base64_decode_ex(const unsigned char *str, size_t length
 #endif
 /* }}} */
 
-/* {{{ proto string base64_encode(string str)
-   Encodes string using MIME base64 algorithm */
+/* {{{ Encodes string using MIME base64 algorithm */
 PHP_FUNCTION(base64_encode)
 {
 	char *str;
@@ -974,8 +941,7 @@ PHP_FUNCTION(base64_encode)
 }
 /* }}} */
 
-/* {{{ proto string|false base64_decode(string str[, bool strict])
-   Decodes string using MIME base64 algorithm */
+/* {{{ Decodes string using MIME base64 algorithm */
 PHP_FUNCTION(base64_decode)
 {
 	char *str;
