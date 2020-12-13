@@ -1,8 +1,6 @@
 // Utils for configure script
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -94,12 +92,14 @@ if (typeof(CWD) == "undefined") {
 	CWD = FSO.GetParentFolderName(FSO.GetParentFolderName(FSO.GetAbsolutePathName("main\\php_version.h")));
 }
 
-/* defaults; we pick up the precise versions from configure.ac */
-var PHP_VERSION = 8;
-var PHP_MINOR_VERSION = 0;
-var PHP_RELEASE_VERSION = 0;
-var PHP_EXTRA_VERSION = "";
-var PHP_VERSION_STRING = "8.0.0";
+if (!MODE_PHPIZE) {
+	/* defaults; we pick up the precise versions from configure.ac */
+	var PHP_VERSION = 8;
+	var PHP_MINOR_VERSION = 1;
+	var PHP_RELEASE_VERSION = 0;
+	var PHP_EXTRA_VERSION = "";
+	var PHP_VERSION_STRING = "8.1.0";
+}
 
 /* Get version numbers and DEFINE as a string */
 function get_version_numbers()
@@ -127,6 +127,17 @@ build_dirs = new Array();
 
 extension_include_code = "";
 extension_module_ptrs = "";
+
+(function () {
+	var wmiservice = GetObject("winmgmts:{impersonationLevel=impersonate}!\\\\.\\root\\cimv2");
+	var oss = wmiservice.ExecQuery("Select * from Win32_OperatingSystem");
+	var os = oss.ItemIndex(0);
+	AC_DEFINE("PHP_BUILD_SYSTEM", os.Caption + " [" + os.Version + "]", "Windows build system version");
+	var build_provider = WshShell.Environment("Process").Item("PHP_BUILD_PROVIDER");
+	if (build_provider) {
+		AC_DEFINE("PHP_BUILD_PROVIDER", build_provider);
+	}
+}());
 
 if (!MODE_PHPIZE) {
 	get_version_numbers();
@@ -321,7 +332,7 @@ function conf_process_args()
 	var i, j;
 	var configure_help_mode = false;
 	var analyzed = false;
-	var nice = "cscript /nologo configure.js ";
+	var nice = "cscript /nologo /e:jscript configure.js ";
 	var disable_all = false;
 
 	args = WScript.Arguments;
@@ -439,12 +450,13 @@ can be built that way. \
 	}
 
 	var snapshot_build_exclusions = new Array(
-		'debug', 'crt-debug', 'lzf-better-compression',
+		'debug', 'lzf-better-compression',
 		 'php-build', 'snapshot-template', 'ereg',
 		 'pcre-regex', 'fastcgi', 'force-cgi-redirect',
 		 'path-info-check', 'zts', 'ipv6', 'memory-limit',
 		 'zend-multibyte', 'fd-setsize', 'memory-manager',
-		 'pgi', 'pgo', 'all-shared', 'config-profile'
+		 'pgi', 'pgo', 'all-shared', 'config-profile',
+		 'sanitizer'
 		);
 	var force;
 
@@ -1532,7 +1544,6 @@ function EXTENSION(extname, file_list, shared, cflags, dllname, obj_dir)
 			var _tmp = FSO.CreateTextFile(PHP_DIR + "/include/main/config.pickle.h", true);
 			_tmp.Close();
 		}
-		cflags = "/FI main/config.pickle.h " + cflags;
 	}
 	ADD_FLAG("CFLAGS_" + EXT, cflags);
 
@@ -2016,9 +2027,6 @@ function generate_tmp_php_ini()
 		var directive = (extensions_enabled[i][2] ? 'zend_extension' : 'extension');
 
 		var ext_name = extensions_enabled[i][0];
-		if ("gd" == ext_name) {
-			ext_name = "gd2";
-		}
 
 		if (!is_on_exclude_list_for_test_ini(ext_list, ext_name)) {
 			INI.WriteLine(directive + "=php_" + ext_name + ".dll");
@@ -2200,7 +2208,7 @@ function generate_config_pickle_h()
 			var ln = outfile.ReadLine();
 
 			for (var i in keys) {
-				var reg = new RegExp("#define[\s ]+" + keys[i] + "[\s ]*.*", "g");
+				var reg = new RegExp("#define[\s ]+" + keys[i] + "[\s ]*.*|#undef[\s ]+" + keys[i], "g");
 
 				if (ln.match(reg)) {
 					found = true;
@@ -2226,6 +2234,7 @@ function generate_config_pickle_h()
 			continue;
 		}*/
 
+		lines.push("#undef " + keys[i]);
 		lines.push("#define " + keys[i] + " " + item[0]);
 	}
 
@@ -2302,18 +2311,10 @@ function generate_config_h()
 		outfile.WriteLine("#define " + keys[i] + " " + pieces);
 	}
 
-	if (VS_TOOLSET) {
-		if (VCVERS >= 1800) {
-			outfile.WriteLine("");
-			outfile.WriteLine("#define HAVE_ACOSH 1");
-			outfile.WriteLine("#define HAVE_ASINH 1");
-			outfile.WriteLine("#define HAVE_ATANH 1");
-		}
-		if (VCVERS >= 1900) {
-			outfile.WriteLine("#define HAVE_LOG1P 1");
-		}
-	}
-
+	outfile.WriteBlankLines(1);
+	outfile.WriteLine("#if __has_include(\"main/config.pickle.h\")");
+	outfile.WriteLine("#include \"main/config.pickle.h\"");
+	outfile.WriteLine("#endif");
 
 	outfile.Close();
 }
@@ -2340,8 +2341,10 @@ function generate_phpize()
 	MF.WriteLine("var PHP_VERSION=" + PHP_VERSION);
 	MF.WriteLine("var PHP_MINOR_VERSION=" + PHP_MINOR_VERSION);
 	MF.WriteLine("var PHP_RELEASE_VERSION=" + PHP_RELEASE_VERSION);
+	MF.WriteLine("var PHP_EXTRA_VERSION=\"" + PHP_EXTRA_VERSION + "\"");
+	MF.WriteLine("var PHP_VERSION_STRING=\"" + PHP_VERSION_STRING + "\"");
 	MF.WriteBlankLines(1);
-	MF.WriteLine("/* Genereted extensions list with mode (static/shared) */");
+	MF.WriteLine("/* Generated extensions list with mode (static/shared) */");
 
 	var count = extensions_enabled.length;
 	for (i in extensions_enabled) {
@@ -2352,7 +2355,7 @@ function generate_phpize()
 	}
 
 	MF.WriteBlankLines(2);
-	MF.WriteLine("/* Genereted win32/build/phpize.js.in */");
+	MF.WriteLine("/* Generated win32/build/phpize.js.in */");
 	MF.WriteBlankLines(1);
 	MF.Write(file_get_contents("win32/build/phpize.js.in"));
 	MF.Close();
@@ -2436,7 +2439,7 @@ function handle_analyzer_makefile_flags(fd, key, val)
 {
 	var relevant = false;
 
-	/* VS integrates /analyze with the bulid process,
+	/* VS integrates /analyze with the build process,
 		no further action is required. */
 	if ("no" == PHP_ANALYZER || "vs" == PHP_ANALYZER) {
 		return;
@@ -3102,8 +3105,8 @@ function toolset_get_compiler_name(short)
 			return name;
 		} if (version >= 1920) {
 			/* NOTE - VS is intentional. Due to changes in recent Visual Studio
-						versioning scheme refering to the exact VC++ version is
-						hardly predictable. From this version on, it refers to 
+						versioning scheme referring to the exact VC++ version is
+						hardly predictable. From this version on, it refers to
 						Visual Studio version and implies the default toolset.
 						When new versions are introduced, adapt also checks in
 						php_win32_image_compatible(), if needed. */
@@ -3221,7 +3224,7 @@ function toolset_setup_common_cflags()
 
 	// General CFLAGS for building objects
 	DEFINE("CFLAGS", "/nologo $(BASE_INCLUDES) /D _WINDOWS /D WINDOWS=1 \
-		/D ZEND_WIN32=1 /D PHP_WIN32=1 /D WIN32 /D _MBCS /W3 \
+		/D ZEND_WIN32=1 /D PHP_WIN32=1 /D WIN32 /D _MBCS \
 		/D _USE_MATH_DEFINES");
 
 	if (envCFLAGS) {
@@ -3407,13 +3410,13 @@ function toolset_setup_common_ldlags()
 function toolset_setup_common_libs()
 {
 	// urlmon.lib ole32.lib oleaut32.lib uuid.lib gdi32.lib winspool.lib comdlg32.lib
-	DEFINE("LIBS", "kernel32.lib ole32.lib user32.lib advapi32.lib shell32.lib ws2_32.lib Dnsapi.lib psapi.lib bcrypt.lib imagehlp.lib");
+	DEFINE("LIBS", "kernel32.lib ole32.lib user32.lib advapi32.lib shell32.lib ws2_32.lib Dnsapi.lib psapi.lib bcrypt.lib");
 }
 
 function toolset_setup_build_mode()
 {
 	if (PHP_DEBUG == "yes") {
-		ADD_FLAG("CFLAGS", "/LDd /MDd /W3 /Od /D _DEBUG /D ZEND_DEBUG=1 " +
+		ADD_FLAG("CFLAGS", "/LDd /MDd /Od /D _DEBUG /D ZEND_DEBUG=1 " +
 			(X64?"/Zi":"/ZI"));
 		ADD_FLAG("LDFLAGS", "/debug");
 		// Avoid problems when linking to release libraries that use the release
@@ -3425,8 +3428,13 @@ function toolset_setup_build_mode()
 			ADD_FLAG("CFLAGS", "/Zi");
 			ADD_FLAG("LDFLAGS", "/incremental:no /debug /opt:ref,icf");
 		}
-		// Equivalent to Release_TSInline build -> best optimization
-		ADD_FLAG("CFLAGS", "/LD /MD /W3 /Ox /D NDebug /D NDEBUG /D ZEND_WIN32_FORCE_INLINE /GF /D ZEND_DEBUG=0");
+		ADD_FLAG("CFLAGS", "/LD /MD");
+		if (PHP_SANITIZER == "yes" && CLANG_TOOLSET) {
+			ADD_FLAG("CFLAGS", "/Od /D NDebug /D NDEBUG /D ZEND_WIN32_NEVER_INLINE /D ZEND_DEBUG=0");
+		} else {
+			// Equivalent to Release_TSInline build -> best optimization
+			ADD_FLAG("CFLAGS", "/Ox /D NDebug /D NDEBUG /D ZEND_WIN32_FORCE_INLINE /GF /D ZEND_DEBUG=0");
+		}
 
 		// if you have VS.Net /GS hardens the binary against buffer overruns
 		// ADD_FLAG("CFLAGS", "/GS");
@@ -3664,7 +3672,7 @@ function get_clang_lib_dir()
 	if (COMPILER_NAME_LONG.match(/clang version ([\d\.]+) \((.*)\)/)) {
 		ver = RegExp.$1;
 	} else {
-		ERROR("Faled to determine clang lib path");
+		ERROR("Failed to determine clang lib path");
 	}
 
 	if (X64) {
@@ -3697,12 +3705,11 @@ function add_asan_opts(cflags_name, libs_name, ldflags_name)
 	if (COMPILER_NAME_LONG.match(/clang version ([\d\.]+) \((.*)\)/)) {
 		ver = RegExp.$1;
 	} else {
-		ERROR("Faled to determine clang lib path");
+		ERROR("Failed to determine clang lib path");
 	}
 
 	if (!!cflags_name) {
-		ADD_FLAG(cflags_name, "-fsanitize=address");
-		ADD_FLAG(cflags_name, "-fsanitize-address-use-after-scope");
+		ADD_FLAG(cflags_name, "-fsanitize=address,undefined");
 	}
 	if (!!libs_name) {
 		if (X64) {

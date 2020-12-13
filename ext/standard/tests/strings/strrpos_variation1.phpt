@@ -2,11 +2,6 @@
 Test strrpos() function : usage variations - double quoted strings for 'haystack' & 'needle' arguments
 --FILE--
 <?php
-/* Prototype  : int strrpos ( string $haystack, string $needle [, int $offset] );
- * Description: Find position of last occurrence of 'needle' in 'haystack'.
- * Source code: ext/standard/string.c
-*/
-
 /* Test strrpos() function by passing double quoted strings for 'haystack' & 'needle' arguments */
 
 echo "*** Testing strrpos() function: with double quoted strings ***\n";
@@ -108,20 +103,20 @@ int(9)
 int(8)
 bool(false)
 -- Iteration 12 --
-bool(false)
-bool(false)
+int(44)
+int(44)
 -- Iteration 13 --
-bool(false)
-bool(false)
+int(44)
+int(44)
 -- Iteration 14 --
-bool(false)
-bool(false)
+int(44)
+int(44)
 -- Iteration 15 --
-bool(false)
-bool(false)
+int(44)
+int(44)
 -- Iteration 16 --
-bool(false)
-bool(false)
+int(44)
+int(44)
 -- Iteration 17 --
 int(43)
 int(43)

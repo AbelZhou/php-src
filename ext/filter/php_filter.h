@@ -1,7 +1,5 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -43,14 +41,6 @@ PHP_MSHUTDOWN_FUNCTION(filter);
 PHP_RINIT_FUNCTION(filter);
 PHP_RSHUTDOWN_FUNCTION(filter);
 PHP_MINFO_FUNCTION(filter);
-
-PHP_FUNCTION(filter_input);
-PHP_FUNCTION(filter_var);
-PHP_FUNCTION(filter_input_array);
-PHP_FUNCTION(filter_var_array);
-PHP_FUNCTION(filter_list);
-PHP_FUNCTION(filter_has_var);
-PHP_FUNCTION(filter_id);
 
 ZEND_BEGIN_MODULE_GLOBALS(filter)
 	zval post_array;

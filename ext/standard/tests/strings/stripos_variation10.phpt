@@ -2,11 +2,6 @@
 Test stripos() function : usage variations - unexpected inputs for 'needle' argument
 --FILE--
 <?php
-/* Prototype  : int stripos ( string $haystack, string $needle [, int $offset] );
- * Description: Find position of first occurrence of a case-insensitive string
- * Source code: ext/standard/string.c
-*/
-
 /* Test stripos() function with unexpected inputs for 'needle' and
  *  an expected type of input for 'haystack' argument
 */
@@ -95,7 +90,7 @@ fclose($file_handle);  //closing the file handle
 
 echo "*** Done ***";
 ?>
---EXPECTF--
+--EXPECT--
 *** Testing stripos() function with unexpected values for needle ***
 
 -- Iteration 1 --
@@ -126,53 +121,53 @@ bool(false)
 int(17)
 
 -- Iteration 10 --
-stripos() expects parameter 2 to be string, array given
+stripos(): Argument #2 ($needle) must be of type string, array given
 
 -- Iteration 11 --
-stripos() expects parameter 2 to be string, array given
+stripos(): Argument #2 ($needle) must be of type string, array given
 
 -- Iteration 12 --
-stripos() expects parameter 2 to be string, array given
+stripos(): Argument #2 ($needle) must be of type string, array given
 
 -- Iteration 13 --
-stripos() expects parameter 2 to be string, array given
+stripos(): Argument #2 ($needle) must be of type string, array given
 
 -- Iteration 14 --
-stripos() expects parameter 2 to be string, array given
+stripos(): Argument #2 ($needle) must be of type string, array given
 
 -- Iteration 15 --
 int(9)
 
 -- Iteration 16 --
-bool(false)
+int(0)
 
 -- Iteration 17 --
 int(9)
 
 -- Iteration 18 --
-bool(false)
+int(0)
 
 -- Iteration 19 --
 int(64)
 
 -- Iteration 20 --
-bool(false)
+int(0)
 
 -- Iteration 21 --
-bool(false)
+int(0)
 
 -- Iteration 22 --
-bool(false)
+int(0)
 
 -- Iteration 23 --
-bool(false)
+int(0)
 
 -- Iteration 24 --
-stripos() expects parameter 2 to be string, resource given
+stripos(): Argument #2 ($needle) must be of type string, resource given
 
 -- Iteration 25 --
-bool(false)
+int(0)
 
 -- Iteration 26 --
-bool(false)
+int(0)
 *** Done ***

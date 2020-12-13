@@ -459,30 +459,6 @@ AC_DEFUN([AC_FPM_EPOLL],
 	])
 ])
 
-AC_DEFUN([AC_FPM_POLL],
-[
-	AC_MSG_CHECKING([for poll])
-
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-		#include <poll.h>
-	]], [[
-		struct pollfd fds[2];
-
-		fds[0].fd = 0;
-		fds[0].events = POLLIN;
-
-		fds[1].fd = 0;
-		fds[1].events = POLLIN;
-
-		 poll(fds, 2, 1);
-	]])], [
-		AC_DEFINE([HAVE_POLL], 1, [do we have poll?])
-		AC_MSG_RESULT([yes])
-	], [
-		AC_MSG_RESULT([no])
-	])
-])
-
 AC_DEFUN([AC_FPM_SELECT],
 [
 	AC_MSG_CHECKING([for select])
@@ -512,22 +488,6 @@ AC_DEFUN([AC_FPM_SELECT],
 	])
 ])
 
-AC_DEFUN([AC_FPM_APPARMOR],
-[
-	AC_MSG_CHECKING([for apparmor])
-
-	SAVED_LIBS="$LIBS"
-	LIBS="$LIBS -lapparmor"
-
-	AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <sys/apparmor.h>]], [[change_hat("test", 0);]])], [
-		AC_DEFINE([HAVE_APPARMOR], 1, [do we have apparmor support?])
-		AC_MSG_RESULT([yes])
-	], [
-		LIBS="$SAVED_LIBS"
-		AC_MSG_RESULT([no])
-	])
-])
-
 AC_MSG_CHECKING(for FPM build)
 if test "$PHP_FPM" != "no"; then
   AC_MSG_RESULT($PHP_FPM)
@@ -544,9 +504,7 @@ if test "$PHP_FPM" != "no"; then
   AC_FPM_PORT
   AC_FPM_DEVPOLL
   AC_FPM_EPOLL
-  AC_FPM_POLL
   AC_FPM_SELECT
-  AC_FPM_APPARMOR
 
   PHP_ARG_WITH([fpm-user],,
     [AS_HELP_STRING([[--with-fpm-user[=USER]]],
@@ -570,6 +528,12 @@ if test "$PHP_FPM" != "no"; then
   PHP_ARG_WITH([fpm-acl],,
     [AS_HELP_STRING([--with-fpm-acl],
       [Use POSIX Access Control Lists])],
+    [no],
+    [no])
+
+  PHP_ARG_WITH([fpm-apparmor],,
+    [AS_HELP_STRING([--with-fpm-apparmor],
+      [Support AppArmor confinement through libapparmor])],
     [no],
     [no])
 
@@ -602,6 +566,16 @@ if test "$PHP_FPM" != "no"; then
       ],[
         AC_MSG_ERROR(libacl required not found)
       ])
+    ])
+  fi
+
+  if test "x$PHP_FPM_APPARMOR" != "xno" ; then
+    AC_CHECK_HEADERS([sys/apparmor.h])
+    AC_CHECK_LIB(apparmor, aa_change_profile, [
+      PHP_ADD_LIBRARY(apparmor)
+      AC_DEFINE(HAVE_APPARMOR, 1, [ AppArmor confinement available ])
+    ],[
+      AC_MSG_ERROR(libapparmor required but not found)
     ])
   fi
 
@@ -685,7 +659,7 @@ if test "$PHP_FPM" != "no"; then
         BUILD_FPM="\$(CC) \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(EXTRA_LDFLAGS_PROGRAM) \$(LDFLAGS) \$(NATIVE_RPATHS) \$(PHP_GLOBAL_OBJS:.lo=.o) \$(PHP_BINARY_OBJS:.lo=.o) \$(PHP_FASTCGI_OBJS:.lo=.o) \$(PHP_FPM_OBJS:.lo=.o) \$(PHP_FRAMEWORKS) \$(EXTRA_LIBS) \$(FPM_EXTRA_LIBS) \$(ZEND_EXTRA_LIBS) -o \$(SAPI_FPM_PATH)"
       ;;
       *)
-        BUILD_FPM="\$(LIBTOOL) --mode=link \$(CC) -export-dynamic \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(EXTRA_LDFLAGS_PROGRAM) \$(LDFLAGS) \$(PHP_RPATHS) \$(PHP_GLOBAL_OBJS) \$(PHP_BINARY_OBJS) \$(PHP_FASTCGI_OBJS) \$(PHP_FPM_OBJS) \$(EXTRA_LIBS) \$(FPM_EXTRA_LIBS) \$(ZEND_EXTRA_LIBS) -o \$(SAPI_FPM_PATH)"
+        BUILD_FPM="\$(LIBTOOL) --mode=link \$(CC) -export-dynamic \$(CFLAGS_CLEAN) \$(EXTRA_CFLAGS) \$(EXTRA_LDFLAGS_PROGRAM) \$(LDFLAGS) \$(PHP_RPATHS) \$(PHP_GLOBAL_OBJS:.lo=.o) \$(PHP_BINARY_OBJS:.lo=.o) \$(PHP_FASTCGI_OBJS:.lo=.o) \$(PHP_FPM_OBJS:.lo=.o) \$(EXTRA_LIBS) \$(FPM_EXTRA_LIBS) \$(ZEND_EXTRA_LIBS) -o \$(SAPI_FPM_PATH)"
       ;;
   esac
 

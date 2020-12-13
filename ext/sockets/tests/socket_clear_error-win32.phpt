@@ -8,7 +8,7 @@ if (!extension_loaded('sockets')) {
   die('SKIP sockets extension not available.');
 }
 if(substr(PHP_OS, 0, 3) != 'WIN' ) {
-	die('skip windows only test');
+    die('skip windows only test');
 }
 ?>
 --FILE--
@@ -26,7 +26,6 @@ unset($socket);
 unset($socketConn);
 ?>
 --EXPECTF--
-Warning: socket_connect(): unable to connect [%d]: No connection could be made because the target machine actively refused it.
- in %s on line %d
+Warning: socket_connect(): unable to connect [%d]: No connection could be made because the target machine actively refused it in %s on line %d
 int(%d)
 int(%d)

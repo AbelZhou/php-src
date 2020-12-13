@@ -1,7 +1,5 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -82,7 +80,7 @@
 #define mysql_stmt_param_count(s)		mysqlnd_stmt_param_count((s))
 #define mysql_stmt_num_rows(s)			mysqlnd_stmt_num_rows((s))
 #define mysql_stmt_insert_id(s)			mysqlnd_stmt_insert_id((s))
-#define mysql_stmt_close(s)				mysqlnd_stmt_close((s))
+#define mysql_stmt_close(s)				mysqlnd_stmt_close((s), 0)
 #define mysql_stmt_bind_param(s,b)		mysqlnd_stmt_bind_param((s), (b))
 #define mysql_stmt_bind_result(s,b)		mysqlnd_stmt_bind_result((s), (b))
 #define mysql_stmt_errno(s)				mysqlnd_stmt_errno((s))

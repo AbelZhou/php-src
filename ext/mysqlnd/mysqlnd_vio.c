@@ -1,7 +1,5 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
-  +----------------------------------------------------------------------+
   | Copyright (c) The PHP Group                                          |
   +----------------------------------------------------------------------+
   | This source file is subject to version 3.01 of the PHP license,      |
@@ -79,14 +77,15 @@ MYSQLND_METHOD(mysqlnd_vio, network_read)(MYSQLND_VIO * const vio, zend_uchar * 
 {
 	enum_func_status return_value = PASS;
 	php_stream * net_stream = vio->data->m.get_stream(vio);
-	size_t to_read = count, ret;
+	size_t to_read = count;
 	zend_uchar * p = buffer;
 
 	DBG_ENTER("mysqlnd_vio::network_read");
 	DBG_INF_FMT("count="MYSQLND_SZ_T_SPEC, count);
 
 	while (to_read) {
-		if (!(ret = php_stream_read(net_stream, (char *) p, to_read))) {
+		ssize_t ret = php_stream_read(net_stream, (char *) p, to_read);
+		if (ret <= 0) {
 			DBG_ERR_FMT("Error while reading header from socket");
 			return_value = FAIL;
 			break;
@@ -101,11 +100,11 @@ MYSQLND_METHOD(mysqlnd_vio, network_read)(MYSQLND_VIO * const vio, zend_uchar * 
 
 
 /* {{{ mysqlnd_vio::network_write */
-static size_t
+static ssize_t
 MYSQLND_METHOD(mysqlnd_vio, network_write)(MYSQLND_VIO * const vio, const zend_uchar * const buffer, const size_t count,
 										   MYSQLND_STATS * const stats, MYSQLND_ERROR_INFO * const error_info)
 {
-	size_t ret;
+	ssize_t ret;
 	DBG_ENTER("mysqlnd_vio::network_write");
 	DBG_INF_FMT("sending %u bytes", count);
 	ret = php_stream_write(vio->data->m.get_stream(vio), (char *)buffer, count);
@@ -130,7 +129,7 @@ MYSQLND_METHOD(mysqlnd_vio, open_pipe)(MYSQLND_VIO * const vio, const MYSQLND_CS
 	streams_options |= IGNORE_URL;
 	net_stream = php_stream_open_wrapper(scheme.s + sizeof("pipe://") - 1, "r+", streams_options, NULL);
 	if (!net_stream) {
-		SET_CLIENT_ERROR(error_info, CR_CONNECTION_ERROR, UNKNOWN_SQLSTATE, "Unknown errror while connecting");
+		SET_CLIENT_ERROR(error_info, CR_CONNECTION_ERROR, UNKNOWN_SQLSTATE, "Unknown error while connecting");
 		DBG_RETURN(NULL);
 	}
 	/*
@@ -264,6 +263,7 @@ MYSQLND_METHOD(mysqlnd_vio, post_connect_set_opt)(MYSQLND_VIO * const vio, const
 		}
 
 		net_stream->chunk_size = vio->data->options.net_read_buffer_size;
+		net_stream->flags |= PHP_STREAM_FLAG_SUPPRESS_ERRORS;
 	}
 
 	DBG_VOID_RETURN;
@@ -451,10 +451,14 @@ MYSQLND_METHOD(mysqlnd_vio, consume_uneaten_data)(MYSQLND_VIO * const net, enum 
 
 	if (PHP_STREAM_OPTION_RETURN_ERR != was_blocked) {
 		/* Do a read of 1 byte */
-		int bytes_consumed;
+		ssize_t bytes_consumed;
 
 		do {
-			skipped_bytes += (bytes_consumed = php_stream_read(net_stream, tmp_buf, sizeof(tmp_buf)));
+			bytes_consumed = php_stream_read(net_stream, tmp_buf, sizeof(tmp_buf));
+			if (bytes_consumed <= 0) {
+				break;
+			}
+			skipped_bytes += bytes_consumed;
 		} while (bytes_consumed == sizeof(tmp_buf));
 
 		if (was_blocked) {

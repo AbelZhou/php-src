@@ -1,7 +1,5 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
@@ -127,7 +125,7 @@ static void php_glob_stream_path_split(glob_s_t *pglob, const char *path, int ge
 }
 /* }}} */
 
-static size_t php_glob_stream_read(php_stream *stream, char *buf, size_t count) /* {{{ */
+static ssize_t php_glob_stream_read(php_stream *stream, char *buf, size_t count) /* {{{ */
 {
 	glob_s_t *pglob = (glob_s_t *)stream->abstract;
 	php_stream_dirent *ent = (php_stream_dirent*)buf;
@@ -147,7 +145,7 @@ static size_t php_glob_stream_read(php_stream *stream, char *buf, size_t count) 
 		}
 	}
 
-	return 0;
+	return -1;
 }
 /* }}} */
 

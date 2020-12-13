@@ -1,7 +1,5 @@
 /*
    +----------------------------------------------------------------------+
-   | PHP Version 7                                                        |
-   +----------------------------------------------------------------------+
    | Copyright (c) The PHP Group                                          |
    +----------------------------------------------------------------------+
    | This source file is subject to version 3.01 of the PHP license,      |
@@ -124,7 +122,6 @@ static inline int phpdbg_call_register(phpdbg_param_t *stack) /* {{{ */
 			//???fci.symbol_table = zend_rebuild_symbol_table();
 			fci.object = NULL;
 			fci.retval = &fretval;
-			fci.no_separation = 1;
 
 			if (name->next) {
 				zval params;
@@ -522,12 +519,7 @@ exec_code:
 } /* }}} */
 
 int phpdbg_compile_stdin(zend_string *code) {
-	zval zv;
-
-	ZVAL_STR(&zv, code);
-
-	PHPDBG_G(ops) = zend_compile_string(&zv, "Standard input code");
-
+	PHPDBG_G(ops) = zend_compile_string(code, "Standard input code");
 	zend_string_release(code);
 
 	if (EG(exception)) {
@@ -723,22 +715,21 @@ static inline void phpdbg_handle_exception(void) /* {{{ */
 	zend_object *ex = EG(exception);
 	zend_string *msg, *file;
 	zend_long line;
-	zval zv, rv, tmp;
+	zval rv, tmp;
 
 	EG(exception) = NULL;
 
-	ZVAL_OBJ(&zv, ex);
-	zend_call_method_with_0_params(ex, ex->ce, &ex->ce->__tostring, "__tostring", &tmp);
-	file = zval_get_string(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("file"), 1, &rv));
-	line = zval_get_long(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("line"), 1, &rv));
+	zend_call_known_instance_method_with_0_params(ex->ce->__tostring, ex, &tmp);
+	file = zval_get_string(zend_read_property(zend_get_exception_base(ex), ex, ZEND_STRL("file"), 1, &rv));
+	line = zval_get_long(zend_read_property(zend_get_exception_base(ex), ex, ZEND_STRL("line"), 1, &rv));
 
 	if (EG(exception)) {
 		EG(exception) = NULL;
 		msg = ZSTR_EMPTY_ALLOC();
 	} else {
-		zend_update_property_string(zend_get_exception_base(&zv), &zv, ZEND_STRL("string"), Z_STRVAL(tmp));
+		zend_update_property_string(zend_get_exception_base(ex), ex, ZEND_STRL("string"), Z_STRVAL(tmp));
 		zval_ptr_dtor(&tmp);
-		msg = zval_get_string(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("string"), 1, &rv));
+		msg = zval_get_string(zend_read_property(zend_get_exception_base(ex), ex, ZEND_STRL("string"), 1, &rv));
 	}
 
 	phpdbg_error("exception", "name=\"%s\" file=\"%s\" line=\"" ZEND_LONG_FMT "\"", "Uncaught %s in %s on line " ZEND_LONG_FMT, ZSTR_VAL(ex->ce->name), ZSTR_VAL(file), line);
@@ -1230,14 +1221,13 @@ static int add_module_info(zend_module_entry *module) /* {{{ */ {
 }
 /* }}} */
 
-static int add_zendext_info(zend_extension *ext) /* {{{ */ {
+static void add_zendext_info(zend_extension *ext) /* {{{ */ {
 	phpdbg_write("extension", "name=\"%s\"", "%s\n", ext->name);
-	return 0;
 }
 /* }}} */
 
 #ifdef HAVE_LIBDL
-PHPDBG_API const char *phpdbg_load_module_or_extension(char **path, char **name) /* {{{ */ {
+PHPDBG_API const char *phpdbg_load_module_or_extension(char **path, const char **name) /* {{{ */ {
 	DL_HANDLE handle;
 	char *extension_dir;
 
@@ -1335,7 +1325,7 @@ PHPDBG_API const char *phpdbg_load_module_or_extension(char **path, char **name)
 		}
 
 		module_entry = get_module();
-		*name = (char *) module_entry->name;
+		*name = module_entry->name;
 
 		if (strcmp(ZEND_EXTENSION_BUILD_ID, module_entry->build_id)) {
 			phpdbg_error("dl", "type=\"wrongbuild\" module=\"%s\" buildneeded=\"%s\" buildinstalled=\"%s\"",  "%s was built with configuration %s, whereas running engine is %s", module_entry->name, module_entry->build_id, ZEND_EXTENSION_BUILD_ID);
@@ -1381,8 +1371,8 @@ quit:
 
 PHPDBG_COMMAND(dl) /* {{{ */
 {
-	const char *type;
-	char *name, *path;
+	const char *type, *name;
+	char *path;
 
 	if (!param || param->type == EMPTY_PARAM) {
 		phpdbg_notice("dl", "extensiontype=\"Zend extension\"", "Zend extensions");
@@ -1398,7 +1388,6 @@ PHPDBG_COMMAND(dl) /* {{{ */
 			phpdbg_activate_err_buf(1);
 			if ((type = phpdbg_load_module_or_extension(&path, &name)) == NULL) {
 				phpdbg_error("dl", "path=\"%s\" %b", "Could not load %s, not found or invalid zend extension / module: %b", path);
-				efree(name);
 			} else {
 				phpdbg_notice("dl", "extensiontype=\"%s\" name=\"%s\" path=\"%s\"", "Successfully loaded the %s %s at path %s", type, name, path);
 			}
@@ -1668,7 +1657,6 @@ static inline void list_code() {
 		zend_clear_exception(); \
 		list_code(); \
 		switch (phpdbg_interactive(allow_async_unsafe, NULL)) { \
-			zval zv; \
 			case PHPDBG_LEAVE: \
 			case PHPDBG_FINISH: \
 			case PHPDBG_UNTIL: \
@@ -1678,8 +1666,7 @@ static inline void list_code() {
 					EG(current_execute_data)->opline = backup_opline; \
 					EG(exception) = exception; \
 				} else { \
-					Z_OBJ(zv) = exception; \
-					zend_throw_exception_internal(&zv); \
+					zend_throw_exception_internal(exception); \
 				} \
 				EG(opline_before_exception) = before_ex; \
 		} \
@@ -1710,9 +1697,14 @@ void phpdbg_execute_ex(zend_execute_data *execute_data) /* {{{ */
 
 #ifdef ZEND_WIN32
 		if (EG(timed_out)) {
-			zend_timeout(0);
+			zend_timeout();
 		}
 #endif
+
+		if (exception && zend_is_unwind_exit(exception)) {
+			/* Restore bailout based exit. */
+			zend_bailout();
+		}
 
 		if (PHPDBG_G(flags) & PHPDBG_PREVENT_INTERACTIVE) {
 			phpdbg_print_opline_ex(execute_data, 0);
@@ -1722,9 +1714,6 @@ void phpdbg_execute_ex(zend_execute_data *execute_data) /* {{{ */
 		/* check for uncaught exceptions */
 		if (exception && PHPDBG_G(handled_exception) != exception && !(PHPDBG_G(flags) & PHPDBG_IN_EVAL)) {
 			zend_execute_data *prev_ex = execute_data;
-			zval zv, rv;
-			zend_string *file, *msg;
-			zend_long line;
 
 			do {
 				prev_ex = zend_generator_check_placeholder_frame(prev_ex);
@@ -1740,10 +1729,10 @@ void phpdbg_execute_ex(zend_execute_data *execute_data) /* {{{ */
 
 			PHPDBG_G(handled_exception) = exception;
 
-			ZVAL_OBJ(&zv, exception);
-			file = zval_get_string(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("file"), 1, &rv));
-			line = zval_get_long(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("line"), 1, &rv));
-			msg = zval_get_string(zend_read_property(zend_get_exception_base(&zv), &zv, ZEND_STRL("message"), 1, &rv));
+			zval rv;
+			zend_string *file = zval_get_string(zend_read_property(zend_get_exception_base(exception), exception, ZEND_STRL("file"), 1, &rv));
+			zend_long line = zval_get_long(zend_read_property(zend_get_exception_base(exception), exception, ZEND_STRL("line"), 1, &rv));
+			zend_string *msg = zval_get_string(zend_read_property(zend_get_exception_base(exception), exception, ZEND_STRL("message"), 1, &rv));
 
 			phpdbg_error("exception",
 				"name=\"%s\" file=\"%s\" line=\"" ZEND_LONG_FMT "\"",
